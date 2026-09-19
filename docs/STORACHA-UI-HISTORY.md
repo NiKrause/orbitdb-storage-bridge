@@ -44,7 +44,7 @@ git show ba62779~1:src/lib/StorachaIntegration.svelte   # 802 lines
 | 2025-09-06 | A **copy** arrives here as `src/components/StorachaIntegration.svelte` (`9b5aa56`). The two have drifted apart since; the copy is 965 lines against the original's 802. |
 | 2025-11-23 | The UCAN delegation example leaves the mainline: `40bc9ae` moves `examples/svelte/ucan-delegation` to the branch `feature/ucan-delegation-example`. |
 | 2026-05-27 | **simple-todo deletes the original** and its documentation — `ba62779`, the same commit that removed Storacha from that app and added its sponsor-relay button. |
-| 2026-09-17 | The three Storacha test harnesses stop being published ([#83](https://github.com/NiKrause/orbitdb-storage-bridge/pull/83)); their sources stay in `src/components`. |
+| 2026-09-17 | The three Storacha test harnesses stop being published ([#83](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/pull/83)); their sources stay in `src/components`. |
 
 So the copy in this repository is the only living version of a widget whose original was
 thrown away, and the package it belongs to has since been renamed away from Storacha.
@@ -55,7 +55,7 @@ thrown away, and the package it belongs to has since been renamed away from Stor
 |---|---|---|
 | `StorachaIntegration.svelte`, `StorachaAuth.svelte` | `src/components/`, published in 0.7.0 | **Cannot be imported** — see below |
 | `StorachaTest*.svelte` (three harnesses) | `src/components/` | In the repository only, not published since #83 |
-| `ucan-delegation` example (49 files) | branch [`feature/ucan-delegation-example`](https://github.com/NiKrause/orbitdb-storage-bridge/tree/feature/ucan-delegation-example/examples/svelte/ucan-delegation), tip `b1ceb00` | Complete, but its README is only the SvelteKit template |
+| `ucan-delegation` example (49 files) | branch [`feature/ucan-delegation-example`](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/tree/feature/ucan-delegation-example/examples/svelte/ucan-delegation), tip `b1ceb00` | Complete, but its README is only the SvelteKit template |
 | UCAN file uploads in a browser | separate repository [NiKrause/ucan-upload-wall](https://github.com/NiKrause/ucan-upload-wall) | Has its own documentation, demo and video |
 | The widget's original and its documentation | simple-todo history, `ba62779~1` | Deleted from that app |
 

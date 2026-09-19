@@ -44,7 +44,7 @@ daily that they still hold the data, **Filecoin Pay** streams payment per proven
 the optional CDN.
 
 ```js
-const synapse = Synapse.create({ account, source: 'orbitdb-storage-bridge', chain: mainnet })
+const synapse = Synapse.create({ account, source: '@le-space/orbitdb-storage-bridge', chain: mainnet })
 await synapse.storage.prepare({ pieceSizes: [BigInt(car.byteLength)] })   // deposit + approval, 1 tx
 const { pieceCid, copies } = await synapse.storage.upload(car)            // 2 providers by default
 const bytes = await synapse.storage.download({ pieceCid })
@@ -149,7 +149,7 @@ workflow, on an account whose trial had run out:
 
 So uploads, the CAR round trip and a database restore are **not yet verified against a live
 account** — that waits for a paid plan and is tracked in
-[issue 60](https://github.com/NiKrause/orbitdb-storage-bridge/issues/60). What the offline tests pin
+[issue 60](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/issues/60). What the offline tests pin
 down instead are the request and answer shapes of `@lighthouse-web3/sdk` 0.4.7. The driver reports
 an expired plan as `UNSUPPORTED`, not as a bad key.
 
@@ -305,7 +305,7 @@ choosing.
    [`orbitdb-relay-pinner`](https://github.com/NiKrause/orbitdb-relay-pinner) are what made the 504s
    at the top of this page survivable at all. A paid backend is the third copy, not the copy.
 
-The phased plan built on this is [issue 54](https://github.com/NiKrause/orbitdb-storage-bridge/issues/54), kept out of
+The phased plan built on this is [issue 54](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/issues/54), kept out of
 this page so a stale plan cannot be mistaken for a fact.
 
 **Open questions to measure before committing**

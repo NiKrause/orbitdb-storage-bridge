@@ -24,5 +24,5 @@ narrower — Aleph takes an upload and hands back a CID, and nothing more — so
 the restore path takes a CID rather than a space.
 
 The Storacha driver itself is still shipped
-(`orbitdb-storage-bridge/backends/storacha`), and the gateway reads it does
+(`@le-space/orbitdb-storage-bridge/backends/storacha`), and the gateway reads it does
 still work. It is the uploads that do not.

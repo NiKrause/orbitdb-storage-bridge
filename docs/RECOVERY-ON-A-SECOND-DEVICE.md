@@ -13,8 +13,8 @@ Four things, and each is a separate problem:
 
 | | The problem | Where it is solved |
 |---|---|---|
-| **The data** | the database has to exist somewhere the new device can fetch it | `orbitdb-storage-bridge/backup-car` — one CAR, one metadata file |
-| **The name** | nobody can *tell* the new device a CID, so the location must be computable | `orbitdb-storage-bridge/pointer-ipns` — an IPNS name derived from a secret |
+| **The data** | the database has to exist somewhere the new device can fetch it | `@le-space/orbitdb-storage-bridge/backup-car` — one CAR, one metadata file |
+| **The name** | nobody can *tell* the new device a CID, so the location must be computable | `@le-space/orbitdb-storage-bridge/pointer-ipns` — an IPNS name derived from a secret |
 | **The identity** | a restored copy is readable, but writing needs the *same* identity | `@le-space/orbitdb-identity-provider-webauthn-did` ≥ 0.6.0 — derived from the passkey, not stored |
 | **The secret** | all three need one thing that survived the loss | the passkey's **PRF output**, which never leaves the authenticator's answer |
 
@@ -28,8 +28,8 @@ derived from it.
 
 ```js
 import { restoreIdentityFromAuthenticator } from '@le-space/orbitdb-identity-provider-webauthn-did'
-import { dehydrate } from 'orbitdb-storage-bridge/dehydrate'
-import { createAlephBackend } from 'orbitdb-storage-bridge/backends/aleph'
+import { dehydrate } from '@le-space/orbitdb-storage-bridge/dehydrate'
+import { createAlephBackend } from '@le-space/orbitdb-storage-bridge/backends/aleph'
 
 // Two touches of the passkey: the DID, and the signing key derived from the
 // PRF output. Both are the same on any device holding this key.
@@ -53,7 +53,7 @@ under, which nobody has to write down.
 
 ```js
 import { restoreIdentityFromAuthenticator } from '@le-space/orbitdb-identity-provider-webauthn-did'
-import { hydrate } from 'orbitdb-storage-bridge/dehydrate'
+import { hydrate } from '@le-space/orbitdb-storage-bridge/dehydrate'
 
 const identity = await restoreIdentityFromAuthenticator()   // same key, same DID
 
@@ -176,10 +176,10 @@ Say these out loud before building on it:
 
 ## Where the pieces live
 
-- `orbitdb-storage-bridge/dehydrate` — `dehydrate()`, `hydrate()`
-- `orbitdb-storage-bridge/pointer-ipns` — `derivePointerKey()`,
+- `@le-space/orbitdb-storage-bridge/dehydrate` — `dehydrate()`, `hydrate()`
+- `@le-space/orbitdb-storage-bridge/pointer-ipns` — `derivePointerKey()`,
   `publishPointer()`, `resolvePointer()`
-- `orbitdb-storage-bridge/backup-car`, `/restore-cid` — the CAR and the
+- `@le-space/orbitdb-storage-bridge/backup-car`, `/restore-cid` — the CAR and the
   metadata underneath
 - `@le-space/orbitdb-identity-provider-webauthn-did` —
   `restoreIdentityFromAuthenticator()`, `recoverPublicKey()`,

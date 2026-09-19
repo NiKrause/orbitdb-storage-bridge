@@ -19,7 +19,7 @@
 
 
 ### Added
-- **`orbitdb-storage-bridge/dehydrate`: put a database where a second device can find it, and get
+- **`@le-space/orbitdb-storage-bridge/dehydrate`: put a database where a second device can find it, and get
   it back.** `dehydrate()` backs the database up as a CAR, uploads it, and publishes an IPNS
   pointer to it under a name derived from a seed; `hydrate()` finds that pointer with the same
   seed and nothing else, checks the record against the name it asked for, fetches the backup and
@@ -37,7 +37,7 @@
 
 
 ### Added
-- **`orbitdb-storage-bridge/pointer-ipns`: a pointer a second device can find with nothing but a
+- **`@le-space/orbitdb-storage-bridge/pointer-ipns`: a pointer a second device can find with nothing but a
   key.** A backup's CID is enough to fetch it from anywhere — but a device that has lost
   everything cannot be *told* a CID, because there is nobody left to tell it. So the name is
   computed instead: `derivePointerKey(seed)` stretches a secret (a passkey's PRF output is the
@@ -106,14 +106,14 @@
   The two pieces a backup needs moved out (`lib/extract-blocks.js`, `lib/backends/resolve.js`),
   the Storacha backend is built through a dynamic import, and the Storacha-space paths inside
   `backup-car.js` fetch the main entry only when a space is actually consulted. Importing
-  `orbitdb-storage-bridge/backup-car` now costs **4.2 kB gzipped**. No import path changed:
+  `@le-space/orbitdb-storage-bridge/backup-car` now costs **4.2 kB gzipped**. No import path changed:
   everything the main entry exported, it still exports. A test walks the static import graph, so
   the client cannot creep back in.
 
 ## 0.8.0 (2026-09-18)
 
 ### Added
-- **Lighthouse storage driver**, `orbitdb-storage-bridge/backends/lighthouse`: upload, listing
+- **Lighthouse storage driver**, `@le-space/orbitdb-storage-bridge/backends/lighthouse`: upload, listing
   and deletion over the endpoints `@lighthouse-web3/sdk` 0.4.7 uses, without the SDK. A backup's
   CAR goes up as a plain file and comes back byte for byte; `carImport: true` sends CARs to
   `dag/import` instead. File names go up without their path, and errors carry Lighthouse's reason;
@@ -139,7 +139,7 @@
 ## 0.7.0 (2026-09-17)
 
 ### Added
-- **Pinata storage driver**, `orbitdb-storage-bridge/backends/pinata` (#80, #84). Verified against a
+- **Pinata storage driver**, `@le-space/orbitdb-storage-bridge/backends/pinata` (#80, #84). Verified against a
   live free-plan account on 2026-09-17: upload, listing, deletion, CAR backups and a database
   restored on a second node. Pin by CID and CAR import are paid-plan features, so both are opt-in
   (`pinByCid`, `carImport`). Use the dedicated gateway of the key's own account; it may be given as
@@ -150,10 +150,10 @@
   devDependencies now: nothing the package ships imports them. Installing the package brings no
   known vulnerability (`npm audit --omit=dev`) (#85).
 - Errors the library rethrows from a `catch` carry the original error as `cause` (#86).
-- **Renamed to `orbitdb-storage-bridge`** — published as `orbitdb-storacha-bridge` up to 0.6.0.
+- **Renamed to `@le-space/orbitdb-storage-bridge`** — published as `orbitdb-storacha-bridge` up to 0.6.0.
   Storacha is no longer the only backend, so the name stopped describing the package. The
   rename changes no API: replace the dependency and the import specifiers
-  (`orbitdb-storacha-bridge/courier-sync` → `orbitdb-storage-bridge/courier-sync`, and so on).
+  (`orbitdb-storacha-bridge/courier-sync` → `@le-space/orbitdb-storage-bridge/courier-sync`, and so on).
   Names that refer to Storacha itself stay — `OrbitDBStorachaBridge`, `StorachaIntegration.svelte`,
   `backends/storacha`, the `storacha_*` localStorage keys — and so does the debug namespace
   `libp2p:orbitdb-storacha:*`.
@@ -164,7 +164,7 @@
   them could be imported.
 
 Releases 0.5.0 to 0.6.0 are described in their
-[GitHub release notes](https://github.com/NiKrause/orbitdb-storage-bridge/releases).
+[GitHub release notes](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/releases).
 
 ## 0.4.3 (2026-01-23)
 

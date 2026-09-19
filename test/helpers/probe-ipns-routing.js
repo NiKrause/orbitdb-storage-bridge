@@ -78,7 +78,7 @@ const ORIGIN = "https://example.org"; // a page's origin, for the preflight
 const RESOLVERS = ["https://ipfs.io", "https://dweb.link"];
 
 const seed = createHash("sha256")
-  .update("orbitdb-storage-bridge ipns routing probe")
+  .update("@le-space/orbitdb-storage-bridge ipns routing probe")
   .digest();
 const privateKey = await generateKeyPairFromSeed("Ed25519", seed);
 const peerId = peerIdFromPrivateKey(privateKey);
