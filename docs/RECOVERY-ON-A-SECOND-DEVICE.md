@@ -99,6 +99,42 @@ the pointer name from it already holds the identity, so nothing is given away.
 An earlier design in this family kept an encrypted identity archive next to the
 backup. With a derived signing key there is nothing to put in it.
 
+**And that is what makes the restored copy a writer rather than a reader.** The
+device that comes back produces the same identity document — same id, same hash
+— so the access controller that named the original writer accepts its entries.
+Shown in `test/restored-can-write.test.js`: the restored device writes, the
+entry crosses a courier, and the original takes it; a device holding another
+key restores the same database, reads it, and is **refused** on write.
+
+## Two traps on the way
+
+Both cost an afternoon; neither announces itself.
+
+**`Identities` without `ipfs` can only verify what it created itself.**
+`Identities({ keystore })` keeps identity documents in memory, so a node
+restoring somebody else's database drops every entry it cannot verify — and a
+restored database is full of entries written by an identity this node has never
+minted. The log comes back *empty*, with no error. Pass the Helia instance:
+
+```js
+const identities = await Identities({ keystore, ipfs: helia })
+```
+
+**Seeding a keystore under your own label is not enough** (with OrbitDB's
+default `publickey` provider). `createIdentity({ id: 'label' })` resolves the
+id to the *hex public key* of the key stored under `label`, and then looks for
+a key under **that** hex id — generating a random one when it finds none. The
+identity then differs on every device even though the seed does not. Seed both:
+
+```js
+await keystore.addKey(label, { privateKey: derived })
+const seeded = await keystore.getKey(label)
+await keystore.addKey(hex(seeded.publicKey.raw), { privateKey: derived })
+```
+
+The WebAuthn identity provider does not have this detour: its id is the DID and
+it seeds the key under the DID.
+
 ## What this does not promise
 
 Say these out loud before building on it:
