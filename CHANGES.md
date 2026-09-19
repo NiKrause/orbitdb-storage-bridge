@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased
+## 0.10.0 (2026-09-19)
 
 ### Added
 - **The restored device writes, and the original takes the entry** — P11 step 5, shown rather than
