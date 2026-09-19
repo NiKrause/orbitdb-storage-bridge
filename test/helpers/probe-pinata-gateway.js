@@ -27,7 +27,7 @@ const pinata = createPinataBackend({
   gatewayRetries: 0,
 });
 const bytes = new TextEncoder().encode(
-  `orbitdb-storage-bridge gateway probe ${new Date().toISOString()} ${Math.random()}`,
+  `@le-space/orbitdb-storage-bridge gateway probe ${new Date().toISOString()} ${Math.random()}`,
 );
 
 let handle;

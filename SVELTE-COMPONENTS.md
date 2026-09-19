@@ -98,7 +98,7 @@ In the examples/svelte diretory you find three simple to advanced OrbitDB-Storac
 
 - simple-backup-restore (Alice creates a db and backs it up to Aleph, Pinata or Lighthouse - Bob restores it into his own - no replication)
 - orbitdb-replication (Alice and Bob replicate one database through a relay, and back it up to Aleph, Pinata or Lighthouse; both may write)
-- ucan-delegation (P-256 UCAN's were not supported by Storacha's upload service; the example left the mainline on 2025-11-23 and lives on the branch [`feature/ucan-delegation-example`](https://github.com/NiKrause/orbitdb-storage-bridge/tree/feature/ucan-delegation-example/examples/svelte/ucan-delegation) — see [docs/STORACHA-UI-HISTORY.md](docs/STORACHA-UI-HISTORY.md))
+- ucan-delegation (P-256 UCAN's were not supported by Storacha's upload service; the example left the mainline on 2025-11-23 and lives on the branch [`feature/ucan-delegation-example`](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/tree/feature/ucan-delegation-example/examples/svelte/ucan-delegation) — see [docs/STORACHA-UI-HISTORY.md](docs/STORACHA-UI-HISTORY.md))
 
 ## Live Demo
 

@@ -5,22 +5,22 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-22+-green.svg)](https://nodejs.org/)
-[![CI/CD Pipeline](https://github.com/NiKrause/orbitdb-storage-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/NiKrause/orbitdb-storage-bridge/actions/workflows/ci.yml)
-[![ESLint](https://img.shields.io/badge/ESLint-passing-brightgreen.svg)](https://github.com/NiKrause/orbitdb-storage-bridge/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/orbitdb-storage-bridge.svg)](https://www.npmjs.com/package/orbitdb-storage-bridge)
+[![CI/CD Pipeline](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/actions/workflows/ci.yml)
+[![ESLint](https://img.shields.io/badge/ESLint-passing-brightgreen.svg)](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@le-space/orbitdb-storage-bridge.svg)](https://www.npmjs.com/package/@le-space/orbitdb-storage-bridge)
 
 > [!NOTE]
 > **Renamed from `orbitdb-storacha-bridge`.** Up to 0.6.0 this package was published as
-> `orbitdb-storacha-bridge`. From 0.7.0 it is `orbitdb-storage-bridge`, because Storacha is no
+> `orbitdb-storacha-bridge`. From 0.7.0 it is `@le-space/orbitdb-storage-bridge`, because Storacha is no
 > longer the only backend it bridges to. The rename changes no API — swap the dependency and the
 > import specifiers:
 >
 > ```bash
 > npm uninstall orbitdb-storacha-bridge
-> npm install orbitdb-storage-bridge
+> npm install @le-space/orbitdb-storage-bridge
 > ```
 >
-> `orbitdb-storacha-bridge/courier-sync` becomes `orbitdb-storage-bridge/courier-sync`, and so on
+> `orbitdb-storacha-bridge/courier-sync` becomes `@le-space/orbitdb-storage-bridge/courier-sync`, and so on
 > for every entry point. Names that refer to Storacha itself stay as they are:
 > `OrbitDBStorachaBridge`, `StorachaIntegration.svelte`, `backends/storacha`, the `storacha_*`
 > localStorage keys that hold saved logins — and so does the debug namespace
@@ -37,7 +37,7 @@
 
 ## Table of Contents
 
-- [OrbitDB Storage Bridge](#orbitdb-storage-bridge)
+- [OrbitDB Storage Bridge](#@le-space/orbitdb-storage-bridge)
   - [Table of Contents](#table-of-contents)
   - [Status: Storacha sunset (May 2026)](#status-storacha-sunset-may-2026)
   - [What we want to accomplish](#what-we-want-to-accomplish)
@@ -157,7 +157,7 @@ The project includes **Svelte components** for browser-based demos and integrati
 ## Roadmap
 
 > Being re-based on a backend interface instead of a single vendor — the plan is
-> [issue 54](https://github.com/NiKrause/orbitdb-storage-bridge/issues/54), not here. The WebAuthn/varsig items below survive
+> [issue 54](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/issues/54), not here. The WebAuthn/varsig items below survive
 > unchanged; the Storacha-named ones become backend-agnostic.
 
 - [ ] Live parallel persistence: hand an open database a backend-backed OrbitDB `ComposedStorage`, so every block is written to a backend **as it is created** — during sync and after each update — rather than only when a backup runs.
@@ -169,11 +169,11 @@ The project includes **Svelte components** for browser-based demos and integrati
 - [ ] v0.4.4 (Feb 2026): Latest-backup pointer (single CID) to avoid listing via the Storacha SDK and restore from the IPFS network for initial OrbitDB syncs.
   - [ ] After each backup, write a small pointer record (JSON) that stores the latest metadata CID, CAR CID, and last heads (block CID).
   - [ ] Store that pointer in a user-controlled place (local storage, QR/share link, WebAuthN largetBlog extension or file download).
-- [ ] v0.5.0 (Feb 2026): OrbitDB CustomStorage (StorachaStorage) ([issue 23](https://github.com/NiKrause/orbitdb-storage-bridge/issues/23)).
+- [ ] v0.5.0 (Feb 2026): OrbitDB CustomStorage (StorachaStorage) ([issue 23](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/issues/23)).
 - [ ] v0.6.0 (Mar 2026): WebAuthN + varsig signing/verification (Ed25519 and P-256) for OrbitDB oplog. https://github.com/ChainAgnostic/varsig/blob/main/README.md
 - [ ] v0.6.1 (Mar 2026): WebAuthN + SimpleEncryption example that uses WebAuthN+PRF key material for encrypted backups and restore.
 - [ ] v0.7.0 (Apr 2026): WebAuthN + OrbitDB AccessController (store a UCAN instead of only a DID for admin/write access).
-  - [ ] Alice (authenticated via UCAN or Storacha credentials) can delegate/revoke access for Bob with custom/default capabilities ([issue 16](https://github.com/NiKrause/orbitdb-storage-bridge/issues/16)). See [WebAuthN Upload Wall](https://github.com/NiKrause/ucan-upload-wall/tree/browser-only/web) and the [live demo](https://bafybeibdcnp7pr26okzr6kbygcounsz3klyg3vydxwwovmz2ljyzfmprre.ipfs.w3s.link/).
+  - [ ] Alice (authenticated via UCAN or Storacha credentials) can delegate/revoke access for Bob with custom/default capabilities ([issue 16](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/issues/16)). See [WebAuthN Upload Wall](https://github.com/NiKrause/ucan-upload-wall/tree/browser-only/web) and the [live demo](https://bafybeibdcnp7pr26okzr6kbygcounsz3klyg3vydxwwovmz2ljyzfmprre.ipfs.w3s.link/).
 - [ ] v0.7.1 (May 2026): Storacha Backup & Restore Svelte widget with WebAuthN-varsig UCAN signing/verification (Ed25519/P-256).
 - [ ] v0.7.2 (May 2026): Storacha Backup & Restore React widget with WebAuthN-varsig UCAN signing/verification (Ed25519/P-256).
 - [ ] v0.7.3 (May 2026): Storacha Backup & Restore React widget with WebAuthN-varsig UCAN delegation (Ed25519/P-256).
@@ -189,7 +189,7 @@ Read more on Medium: [Bridging OrbitDB with Storacha: Decentralized Database Bac
 Install the package via npm:
 
 ```bash
-npm install orbitdb-storage-bridge
+npm install @le-space/orbitdb-storage-bridge
 ```
 
 ## Environment Setup

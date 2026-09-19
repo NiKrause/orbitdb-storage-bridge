@@ -35,7 +35,7 @@ async function isStorachaAvailable() {
   try {
     const response = await fetch("https://w3s.link", {
       method: "HEAD",
-      headers: { "User-Agent": "orbitdb-storage-bridge-test" },
+      headers: { "User-Agent": "@le-space/orbitdb-storage-bridge-test" },
       signal: AbortSignal.timeout(10000), // 10 second timeout
     });
     return response.status < 500; // Accept any status except 5xx server errors

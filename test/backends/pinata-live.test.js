@@ -50,7 +50,7 @@ const pinata = () =>
 /** Unique bytes, so the CID has never been pinned before. */
 const uniqueBytes = (label) =>
   new TextEncoder().encode(
-    `orbitdb-storage-bridge pinata ${label} ${new Date().toISOString()} ${Math.random()}`,
+    `@le-space/orbitdb-storage-bridge pinata ${label} ${new Date().toISOString()} ${Math.random()}`,
   );
 
 /** Withdraw a pin request that never became a file, or it lands in the account later. */
