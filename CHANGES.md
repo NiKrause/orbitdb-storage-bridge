@@ -3,6 +3,22 @@
 ## Unreleased
 
 ### Added
+- **The restored device writes, and the original takes the entry** — P11 step 5, shown rather than
+  argued (`test/restored-can-write.test.js`). A signing key derived from the same secret produces
+  the *same identity document*, hash for hash, on a machine that never saw the first, so the
+  access controller that named the original writer accepts entries from the device that came back.
+  A device holding another key restores the same database, reads it, and is refused on write —
+  which is what makes the acceptance mean anything.
+
+  Two traps found on the way are now in
+  [docs/RECOVERY-ON-A-SECOND-DEVICE.md](docs/RECOVERY-ON-A-SECOND-DEVICE.md), because neither
+  announces itself: `Identities({ keystore })` without `ipfs` verifies only identities it created
+  itself, so a restored log comes back **empty with no error**; and seeding a keystore under your
+  own label is not enough with OrbitDB's default provider, which looks the identity's key up under
+  the derived hex id.
+
+
+### Added
 - **`orbitdb-storage-bridge/dehydrate`: put a database where a second device can find it, and get
   it back.** `dehydrate()` backs the database up as a CAR, uploads it, and publishes an IPNS
   pointer to it under a name derived from a seed; `hydrate()` finds that pointer with the same
