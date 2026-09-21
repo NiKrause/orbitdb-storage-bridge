@@ -5,8 +5,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-22+-green.svg)](https://nodejs.org/)
-[![CI/CD Pipeline](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/actions/workflows/ci.yml)
-[![ESLint](https://img.shields.io/badge/ESLint-passing-brightgreen.svg)](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/actions/workflows/ci.yml)
+[![CI/CD Pipeline](https://github.com/NiKrause/orbitdb-storage-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/NiKrause/orbitdb-storage-bridge/actions/workflows/ci.yml)
+[![ESLint](https://img.shields.io/badge/ESLint-passing-brightgreen.svg)](https://github.com/NiKrause/orbitdb-storage-bridge/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@le-space/orbitdb-storage-bridge.svg)](https://www.npmjs.com/package/@le-space/orbitdb-storage-bridge)
 
 > [!NOTE]
@@ -157,7 +157,7 @@ The project includes **Svelte components** for browser-based demos and integrati
 ## Roadmap
 
 > Being re-based on a backend interface instead of a single vendor — the plan is
-> [issue 54](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/issues/54), not here. The WebAuthn/varsig items below survive
+> [issue 54](https://github.com/NiKrause/orbitdb-storage-bridge/issues/54), not here. The WebAuthn/varsig items below survive
 > unchanged; the Storacha-named ones become backend-agnostic.
 
 - [ ] Live parallel persistence: hand an open database a backend-backed OrbitDB `ComposedStorage`, so every block is written to a backend **as it is created** — during sync and after each update — rather than only when a backup runs.
@@ -169,11 +169,11 @@ The project includes **Svelte components** for browser-based demos and integrati
 - [ ] v0.4.4 (Feb 2026): Latest-backup pointer (single CID) to avoid listing via the Storacha SDK and restore from the IPFS network for initial OrbitDB syncs.
   - [ ] After each backup, write a small pointer record (JSON) that stores the latest metadata CID, CAR CID, and last heads (block CID).
   - [ ] Store that pointer in a user-controlled place (local storage, QR/share link, WebAuthN largetBlog extension or file download).
-- [ ] v0.5.0 (Feb 2026): OrbitDB CustomStorage (StorachaStorage) ([issue 23](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/issues/23)).
+- [ ] v0.5.0 (Feb 2026): OrbitDB CustomStorage (StorachaStorage) ([issue 23](https://github.com/NiKrause/orbitdb-storage-bridge/issues/23)).
 - [ ] v0.6.0 (Mar 2026): WebAuthN + varsig signing/verification (Ed25519 and P-256) for OrbitDB oplog. https://github.com/ChainAgnostic/varsig/blob/main/README.md
 - [ ] v0.6.1 (Mar 2026): WebAuthN + SimpleEncryption example that uses WebAuthN+PRF key material for encrypted backups and restore.
 - [ ] v0.7.0 (Apr 2026): WebAuthN + OrbitDB AccessController (store a UCAN instead of only a DID for admin/write access).
-  - [ ] Alice (authenticated via UCAN or Storacha credentials) can delegate/revoke access for Bob with custom/default capabilities ([issue 16](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/issues/16)). See [WebAuthN Upload Wall](https://github.com/NiKrause/ucan-upload-wall/tree/browser-only/web) and the [live demo](https://bafybeibdcnp7pr26okzr6kbygcounsz3klyg3vydxwwovmz2ljyzfmprre.ipfs.w3s.link/).
+  - [ ] Alice (authenticated via UCAN or Storacha credentials) can delegate/revoke access for Bob with custom/default capabilities ([issue 16](https://github.com/NiKrause/orbitdb-storage-bridge/issues/16)). See [WebAuthN Upload Wall](https://github.com/NiKrause/ucan-upload-wall/tree/browser-only/web) and the [live demo](https://bafybeibdcnp7pr26okzr6kbygcounsz3klyg3vydxwwovmz2ljyzfmprre.ipfs.w3s.link/).
 - [ ] v0.7.1 (May 2026): Storacha Backup & Restore Svelte widget with WebAuthN-varsig UCAN signing/verification (Ed25519/P-256).
 - [ ] v0.7.2 (May 2026): Storacha Backup & Restore React widget with WebAuthN-varsig UCAN signing/verification (Ed25519/P-256).
 - [ ] v0.7.3 (May 2026): Storacha Backup & Restore React widget with WebAuthN-varsig UCAN delegation (Ed25519/P-256).
@@ -223,6 +223,24 @@ running.
 The scripts written against Storacha's space and UCAN model are in
 [`examples/storacha/`](examples/storacha/README.md). None of them runs end to
 end since the uploads stopped, and the README there says what replaced each.
+
+### In a browser: a database back on a device that has nothing
+
+[**funkpost's recovery page**](https://nikrause.github.io/funkpost/recovery/) runs the whole
+[recovery procedure](docs/RECOVERY-ON-A-SECOND-DEVICE.md) in a phone's browser, with a
+security key and nothing else ([source](https://github.com/NiKrause/funkpost/tree/main/examples/recovery)):
+
+1. **the key gives the identity** — the DID, and a signing key derived from its PRF output,
+   the same on every device;
+2. **a list** is made and written to;
+3. **`dehydrate`** backs it up to Aleph as a CAR, and publishes an IPNS pointer under a name
+   the key derives;
+4. **on another device** — or the same one, wiped — the same key finds the pointer, **`hydrate`**
+   brings the list back, and the list takes new entries, because the writer is the same.
+
+On 21 September 2026 it ran that way on two phones: a Galaxy Fold 5 backed up and was reset,
+and a Galaxy A57 with the same key brought the list back and wrote to it. The page says at
+every step which service it contacts; the technical details sit behind one button.
 
 ### Svelte Components
 

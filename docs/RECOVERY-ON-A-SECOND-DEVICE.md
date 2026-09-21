@@ -33,12 +33,12 @@ import { createAlephBackend } from '@le-space/orbitdb-storage-bridge/backends/al
 
 // Two touches of the passkey: the DID, and the signing key derived from the
 // PRF output. Both are the same on any device holding this key.
-const identity = await restoreIdentityFromAuthenticator()
+const restored = await restoreIdentityFromAuthenticator()
 
 await dehydrate({
   orbitdb,
   address: db.address,
-  seed: identity.signingKey,      // the secret both devices can produce
+  seed: restored.signingKey,      // the secret both devices can produce
   label: 'mesh-todo',             // one seed can name several databases
   backend: createAlephBackend(),  // upload without an account
 })
@@ -54,16 +54,44 @@ under, which nobody has to write down.
 ```js
 import { restoreIdentityFromAuthenticator } from '@le-space/orbitdb-identity-provider-webauthn-did'
 import { hydrate } from '@le-space/orbitdb-storage-bridge/dehydrate'
+import { ALEPH_GATEWAYS } from '@le-space/orbitdb-storage-bridge/backends/aleph'
 
-const identity = await restoreIdentityFromAuthenticator()   // same key, same DID
+const restored = await restoreIdentityFromAuthenticator()   // same key, same DID
 
 const { db, address } = await hydrate({
-  orbitdb,                       // built with the identity above
-  seed: identity.signingKey,
+  orbitdb,                       // built with this identity — see below
+  seed: restored.signingKey,
   label: 'mesh-todo',
   open: { sync: false },         // a node without pubsub needs this
+  // The backup went to Aleph, and only Aleph has it the moment it lands. The
+  // default list starts with Storacha's gateways and does not include Aleph's.
+  restore: { gateways: ALEPH_GATEWAYS },
 })
 ```
+
+**Building that `orbitdb` with the passkey vouching**, as funkpost's recovery
+page does, costs a third touch: OrbitDB's identity carries a signature by the
+identity provider over the signing key, and the WebAuthn provider makes it with
+the passkey. Since provider 0.7.0 the restore result carries the credential in
+the shape the provider takes:
+
+```js
+import { Identities, createOrbitDB, useIdentityProvider } from '@orbitdb/core'
+import { OrbitDBWebAuthnIdentityProviderFunction } from '@le-space/orbitdb-identity-provider-webauthn-did'
+
+useIdentityProvider(OrbitDBWebAuthnIdentityProviderFunction)
+const identities = await Identities({ ipfs: helia })   // `ipfs` — see the traps
+const identity = await identities.createIdentity({
+  provider: OrbitDBWebAuthnIdentityProviderFunction({
+    webauthnCredential: restored.credential,
+    signingKeyType: 'secp256k1',
+  }),
+})
+const orbitdb = await createOrbitDB({ ipfs: helia, identity, identities })
+```
+
+Without that touch, the derived key can be the writer itself, through OrbitDB's
+default `publickey` provider — the second trap below shows how to seed it.
 
 `hydrate` derives the same key, asks the routing endpoints for the pointer,
 **checks the record against the name it asked for**, fetches the metadata and
@@ -90,7 +118,7 @@ the backup and the pointer — and neither of them is secret:
   both devices arrive at the same name without exchanging anything.
 
 The seed handed to `dehydrate` above is the signing key rather than the PRF
-output itself, because that is what 0.6.0 gives a caller: it is derived from
+output itself, because that is what the provider gives a caller: it is derived from
 the PRF output with the DID mixed in, so it is equally reproducible and equally
 secret, and `derivePointerKey` stretches it again under its own info string, so
 the pointer key and the signing key never coincide. Anyone who could compute
@@ -106,9 +134,10 @@ Shown in `test/restored-can-write.test.js`: the restored device writes, the
 entry crosses a courier, and the original takes it; a device holding another
 key restores the same database, reads it, and is **refused** on write.
 
-## Two traps on the way
+## Traps on the way
 
-Both cost an afternoon; neither announces itself.
+None of them announces itself. The first two cost an afternoon each in Node;
+the last three turned up on 21 September, between the code and two phones.
 
 **`Identities` without `ipfs` can only verify what it created itself.**
 `Identities({ keystore })` keeps identity documents in memory, so a node
@@ -135,6 +164,35 @@ await keystore.addKey(hex(seeded.publicKey.raw), { privateKey: derived })
 The WebAuthn identity provider does not have this detour: its id is the DID and
 it seeds the key under the DID.
 
+**The credential id comes twice.** The provider wants it as text
+(`credentialId`, written into the signature envelope) and as bytes
+(`rawCredentialId`, sent to the key). Before provider 0.7.0,
+`restoreIdentityFromAuthenticator` returned the bytes under `credentialId`, and
+a page that passed them on as `rawCredentialId` gave the provider no text: the
+third touch succeeded, then `sign()` threw — `Cannot read properties of
+undefined (reading 'substring')`. Since 0.7.0, hand over `restored.credential`
+as it is.
+
+**Helia 7's `createHelia()` does not start the node**, and an `await` in front
+of it looks as if it did. libp2p never runs, and the first block OrbitDB
+stores fails with `Not started`. It also lays the options given over a default
+stack — a DHT, delegated routing, public gateways. For a node that should stay
+quiet, compose it and start it:
+
+```js
+const helia = withLibp2pLight(                     // from @helia/libp2p
+  createHeliaLight({ blockstore, datastore, codecs: [dagCbor] }),
+  { addresses: { listen: [] }, transports: [webSockets()],
+    connectionEncrypters: [noise()], streamMuxers: [yamux()] },
+)
+await helia.start()   // returns nothing; keep `helia`
+```
+
+**Restore asks the gateways it is told**, and the default list is from before
+Aleph: `w3s.link` and `storacha.link` first, then `dweb.link` and `ipfs.io` —
+not Aleph's own gateway, the one place a fresh Aleph upload is certain to be.
+After a backup to Aleph, pass `restore: { gateways: ALEPH_GATEWAYS }`, as above.
+
 ## What this does not promise
 
 Say these out loud before building on it:
@@ -149,8 +207,11 @@ Say these out loud before building on it:
   long it is kept. Publish to more than one endpoint where it matters.
 - **A backup lives as long as the storage backend keeps it.** Aleph takes an
   upload without an account and keeps it without a promise; retention needs a
-  wallet-signed STORE message. Pinata and Lighthouse keep what their accounts
-  pay for.
+  wallet-signed STORE message. `createAlephBackend({ pin: createAlephPin({
+  sender, sign }) })` gives the backend a `pinCid()` for that — but `dehydrate`
+  does not call it: a caller that wants the backup kept pins the returned CIDs
+  itself. Pinata and Lighthouse keep what their accounts pay for, and need a key
+  a public page must not hold.
 - **An update is not visible at once.** A second publish under the same name
   was still not being served six minutes later. Write a pointer once and read
   it back later, rather than treating it as shared mutable state.
@@ -160,6 +221,15 @@ Say these out loud before building on it:
 
 ## What was measured, and on what
 
+- **The whole procedure, on two phones** — 2026-09-21, one YubiKey, through
+  funkpost's [recovery page](https://nikrause.github.io/funkpost/recovery/). A
+  Galaxy Fold 5 made a list and dehydrated it to Aleph, then was **reset**. A
+  Galaxy A57 with the same key had the same DID and derived signing key,
+  hydrated the list with the key alone, and **wrote an entry the access
+  controller accepted**
+  ([funkpost#93](https://github.com/NiKrause/funkpost/issues/93#issuecomment-5765768993)). The missing-PRF refusal was not repeated there; it is
+  in the provider's tests. The identity-and-write half also runs on every
+  funkpost PR, with a Chromium virtual authenticator that has PRF.
 - **PRF travels, and so does the whole identity** — one YubiKey, a Galaxy
   Fold 5 and a Galaxy A57, 2026-09-19: the same PRF value, the passkey found
   without being named, ES256 signatures leaving exactly one candidate public
@@ -182,7 +252,7 @@ Say these out loud before building on it:
 - `@le-space/orbitdb-storage-bridge/backup-car`, `/restore-cid` — the CAR and the
   metadata underneath
 - `@le-space/orbitdb-identity-provider-webauthn-did` —
-  `restoreIdentityFromAuthenticator()`, `recoverPublicKey()`,
+  `restoreIdentityFromAuthenticator()` (0.7.0: `restored.credential`), `recoverPublicKey()`,
   `prfInputForRelyingParty()`, `deriveSigningKeyBytes()`
 
 The phase this was built for is **P11** in
