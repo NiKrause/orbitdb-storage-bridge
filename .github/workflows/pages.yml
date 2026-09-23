@@ -78,7 +78,13 @@ jobs:
             exit 1
           fi
 
+      # `enablement: true` turns Pages on for the repository the first time this
+      # runs. Without it the action fails with "Get Pages site failed" on a
+      # repository where nobody has opened Settings → Pages, which is what
+      # happened on the first run after this workflow landed.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
