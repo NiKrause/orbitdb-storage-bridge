@@ -309,6 +309,38 @@ const backend = await createBackendFromChoice({
 `keyOwnership: "user"` is not decoration: it is what makes `browserSafeAuth` true, and it is only
 honest when the reader minted that key themselves.
 
+**A gateway is part of the choice**, and since the public path gateways were retired on 2026-09-21
+it is usually the reader's own account's — `<name>.mypinata.cloud`, `<name>.lighthouseweb3.xyz` —
+because the shared ones either want that account's key or answer `402`:
+
+```js
+const backend = await createBackendFromChoice({
+  kind: "pinata",
+  jwt,
+  gateway: "silver-fox.mypinata.cloud", // a bare domain is read as https
+});
+```
+
+The two services' gateways are not interchangeable — Pinata's answers `401` for content it does
+not hold, Lighthouse's answers `402` — so with several services chosen, `gateway` is an object and
+a single string is refused rather than handed to all of them:
+
+```js
+const backend = await createBackendFromChoice({
+  kind: ["pinata", "lighthouse"],
+  jwt,
+  apiKey,
+  gateway: {
+    pinata: "https://silver-fox.mypinata.cloud",
+    lighthouse: "https://preferred-cat.lighthouseweb3.xyz",
+  },
+});
+```
+
+Aleph's driver tries a list rather than one host, so a single `gateway` becomes a list of one,
+with `/ipfs` appended where it is missing. Pass `gateways` instead to give it the whole list; it
+wins over `gateway` where both are set.
+
 **`createMirrorBackend([...])`** writes one backup to several services and reads it back from
 whichever answers first, behind the same contract, so `dehydrate` and `restoreFromCID` need to know
 nothing about it.

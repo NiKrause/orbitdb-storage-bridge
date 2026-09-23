@@ -30,6 +30,18 @@
   quiet. Checked against the failure it exists for: putting `dweb.link` back in the list turns it
   red on both counts.
 
+- **`createBackendFromChoice({ gateway })`** (#108). A retrieval gateway was reachable only
+  through the untyped `options` pass-through, which was a gap worth closing before the public
+  path gateways were retired and a bad one afterwards: the gateway a reader can actually use is
+  normally their own account's, and it is now part of the choice they make. A bare domain is read
+  as https, as each driver already accepts.
+
+  The two services' gateways refuse each other's content — Pinata answers `401`, Lighthouse
+  `402` — so with several services chosen this takes an object keyed by service, and a single
+  string is **refused** with a message showing the shape rather than handed to all of them.
+  Aleph's driver tries a list, so one gateway becomes a list of one with `/ipfs` appended; an
+  explicit `gateways` still wins.
+
 ## 0.10.0 (2026-09-19)
 
 ### Added
