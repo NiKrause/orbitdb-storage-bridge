@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/* global matchMedia */
 /**
  * Language and theme for a page with no build step.
  *
