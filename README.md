@@ -60,6 +60,18 @@
   - [License](#license)
 
 
+## Does this work from a browser? Measure it
+
+`examples/browser/storage-probe/` is a static page that asks the services this package talks to,
+from a real browser, with no server: do Aleph, Pinata and Lighthouse answer a page at all, does
+their CORS survive a refusal as well as a success, and does anybody on IPFS hold a given CID at an
+address a browser can dial. With your own key it does a real upload and reads it back. The key is
+kept in that browser and sent only to the service it belongs to.
+
+It is published from this repository's Pages, and it opens from a checkout just as well — there is
+no build step, which is the point: what it measures is a browser talking to a service, with
+nothing in between.
+
 ## Status: Storacha sunset (May 2026)
 
 Storacha switched off user writes in **May 2026** and has since decommissioned the service.

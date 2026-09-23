@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Added
+- **The storage probe is an example in this repository** (#110). It is a static page — one HTML
+  file and one small module, no build step — that measures whether this package's backends work
+  from a browser with no server: Aleph, Pinata and Lighthouse endpoints, their CORS on success
+  *and* on refusal, a provider lookup over `/routing/v1/providers`, and a real upload with the
+  reader's own key, read back.
+
+  It was in a GPL-3.0 application, where someone evaluating this MIT package had no reason to look
+  and where a change to a backend here had no instrument to catch it. Relicensed under MIT by its
+  author for this repository; the brand module it used to import is GPL and did **not** come with
+  it — the language switch and the theme toggle are `probe-ui.js`, written here.
+
+  Keys stay with the reader: typed into the page, kept in `localStorage`, sent to the service they
+  belong to and nowhere else, cleared by a button that says so.
+
+- **A `Pages` workflow**, since there was nowhere to publish a browser instrument. It builds
+  nothing, and fails if a page acquires an import map or a bare specifier — what is deployed has
+  to be what a reader gets by opening the file.
+
+- `test/storage-probe.test.js` — the endpoints the page names have to be the ones the drivers use,
+  since a static page cannot import them and a repetition nobody checks drifts. It also asserts
+  what the move left behind: MIT, no GPL import, no retired gateway, and the CSS rule that hides
+  one of the two languages.
+
 ### Fixed
 - **The retrieval gateways were all retired on the same day** (#111). `ipfs.io` and `dweb.link`
   stopped serving content on 2026-09-21, answering `429` with an RFC 8594 `Sunset` header;
