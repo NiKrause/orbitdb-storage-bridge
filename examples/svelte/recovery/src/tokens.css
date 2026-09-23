@@ -1,0 +1,81 @@
+/* SPDX-License-Identifier: MIT */
+/**
+ * The page's own colours and faces.
+ *
+ * This demo came from an application whose shared brand module supplied these
+ * as `--ls-*`. That module is GPL-3.0 and this package is MIT, so it could not
+ * travel; what it actually gave this page was a palette, two font stacks and a
+ * rule to hide one of the two languages. All of that is here.
+ *
+ * Three theme states, not two: an explicit choice stamps `data-theme` on the
+ * root, and the common case stamps nothing at all and follows the system.
+ */
+:root {
+  --app-bg-0: #f7f8fb;
+  --app-bg-1: #ffffff;
+  --app-bg-2: #ffffff;
+  --app-bg-3: #dfe3ea;
+  --app-text: #15181f;
+  --app-text-dim: #5a6070;
+  --app-accent: #2d5bd7;
+  --app-green: #12694b;
+  --app-red: #a52020;
+  --app-amber: #8a5a00;
+  --app-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --app-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --app-bg-0: #0b0e15;
+    --app-bg-1: #141824;
+    --app-bg-2: #161b28;
+    --app-bg-3: #2a3142;
+    --app-text: #e8ebf2;
+    --app-text-dim: #98a0b4;
+    --app-accent: #7da2ff;
+    --app-green: #46c78f;
+    --app-red: #ff7a70;
+    --app-amber: #e0a54a;
+  }
+}
+
+:root[data-theme="dark"] {
+  --app-bg-0: #0b0e15;
+  --app-bg-1: #141824;
+  --app-bg-2: #161b28;
+  --app-bg-3: #2a3142;
+  --app-text: #e8ebf2;
+  --app-text-dim: #98a0b4;
+  --app-accent: #7da2ff;
+  --app-green: #46c78f;
+  --app-red: #ff7a70;
+  --app-amber: #e0a54a;
+}
+
+body {
+  margin: 0;
+  background: var(--app-bg-0);
+  color: var(--app-text);
+}
+
+/* The language and theme buttons, top right. */
+.page-controls {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+  z-index: 3;
+}
+.page-controls .chip {
+  font-size: 1rem;
+  line-height: 1;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: var(--app-bg-1);
+  border: 1px solid var(--app-bg-3);
+  color: var(--app-text);
+  cursor: pointer;
+}

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recovery on a second device</title>
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0e15" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f8fb" />
+    <!-- Before the first paint: the language (the address, then the last choice,
+         then the browser) and a theme chosen earlier — ui.js keeps both. -->
+    <script>
+      (function(){var d=document.documentElement,s=function(k){try{return localStorage.getItem(k)}catch(e){return null}},q=new URLSearchParams(location.search).get("lang"),l=q==="de"||q==="en"?q:s("recovery:lang");if(l!=="de"&&l!=="en"){l="en";var a=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language];for(var i=0;i<a.length;i++){if(/^de\b/i.test(a[i])){l="de";break}if(/^en\b/i.test(a[i]))break}}d.lang=l;var t=s("recovery:theme");if(t==="dark"||t==="light")d.dataset.theme=t})();
+    </script>
+    <meta name="robots" content="noindex" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
