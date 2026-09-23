@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+/* global location, crypto, getComputedStyle */
 /**
  * The recovery page with a security key, end to end in a browser.
  *
