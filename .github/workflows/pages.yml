@@ -30,10 +30,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # The recovery demo is the one example here that needs building: it is a
+      # Svelte app, not a static page. Everything under examples/browser/ stays
+      # unbuilt on purpose.
+      - name: Build the recovery demo
+        working-directory: examples/svelte/recovery
+        run: |
+          npm install --no-audit --no-fund
+          PAGES_BASE=/orbitdb-storage-bridge/recovery/ npm run build
+
       - name: Collect the browser examples
         run: |
           mkdir -p pages
           cp -R examples/browser/. pages/
+          cp -R examples/svelte/recovery/dist pages/recovery
           cat > pages/index.html <<'HTML'
           <!doctype html>
           <!-- SPDX-License-Identifier: MIT -->
@@ -55,6 +69,12 @@ jobs:
               <p>Pages that measure this package from a browser, with no server and no build step.</p>
               <ul>
                 <li>
+                  <a href="./recovery/">Recovery on a second device</a>
+                  — a security key, a backup in a public network, and a list that comes back on a
+                  phone that has lost everything. Choose where the backup goes; the restore tries
+                  the gateway first and falls through to bitswap from the provider.
+                </li>
+                <li>
                   <a href="./storage-probe/">Storage probe</a>
                   — whether Aleph, Pinata and Lighthouse answer a page, whether their CORS lets a
                   static site upload, and who on IPFS holds a CID at an address a browser can dial.
@@ -69,11 +89,11 @@ jobs:
           # A page that reaches for a bundler or a CDN is one a reader cannot
           # verify by opening the file. Import maps and bare specifiers are how
           # that creeps in.
-          if grep -rn 'type="importmap"' pages/; then
+          if grep -rn 'type="importmap"' pages/ --exclude-dir=recovery; then
             echo "::error::an import map means the page depends on a rewrite step"
             exit 1
           fi
-          if grep -rnE 'from "(https?:)?//|from "[a-z@]' pages/ --include='*.html' --include='*.js'; then
+          if grep -rnE 'from "(https?:)?//|from "[a-z@]' pages/ --include='*.html' --include='*.js' --exclude-dir=recovery; then
             echo "::error::a bare or remote import: these pages import only what sits beside them"
             exit 1
           fi
