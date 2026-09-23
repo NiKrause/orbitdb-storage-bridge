@@ -26,6 +26,31 @@
   what the move left behind: MIT, no GPL import, no retired gateway, and the CSS rule that hides
   one of the two languages.
 
+- **`@le-space/orbitdb-storage-bridge/peer-fetch`: fetch a CID from the peers that hold it**,
+  for when a gateway will not do. `createPeerFetch({ helia, providers })` returns exactly the
+  `fetchBytes` that `restoreFromCID` already takes, so a restore over libp2p needs no other
+  change; `createGatewayFirstFetch` tries HTTP with a short timeout and hands over to peers when
+  it does not answer, telling the caller which path delivered and how long it took.
+
+  Measured from a real page (Chrome, no build step) on 2026-09-23 — all three services, two
+  transports: Pinata 0.73 s to dial over `wss` and 0.26 s for the block, Lighthouse 0.58 s over
+  `webrtc-direct` and 0.32 s, Aleph 0.45 s and 0.35 s. **No credential anywhere in it**, while
+  both paid providers' HTTP gateways want that account's key and Lighthouse's shared one
+  answers 402.
+
+  `ALEPH_BITSWAP` exists because Aleph took finding: it publishes no `_dnsaddr` and answers 404
+  to `/api/v0/id`, so the way Pinata is found says it has no peer. Asking a router for the
+  providers of a CID it holds gives `46.255.204.211` — the address `ipfs.aleph.cloud` resolves
+  to — with `webrtc-direct` and `webtransport`. Only `delegated-ipfs.dev` knows it, because Aleph
+  announces over the DHT rather than IPNI, and that router sends no CORS for provider lookups:
+  hence a constant for pages and `ALL_ROUTERS` for Node.
+
+  There is no default provider list. Whoever stores with a service already shares their CIDs with
+  it, so reading from it adds no new party — but a page dialling a service it never uploaded to
+  would be telling that service what its reader is looking for, for nothing. `PINATA_BITSWAP` is
+  a constant because Pinata publishes it in DNS; `providersFor(cid)` asks a router for the rest,
+  and only `cid.contact` answers a browser.
+
 ### Fixed
 - **The retrieval gateways were all retired on the same day** (#111). `ipfs.io` and `dweb.link`
   stopped serving content on 2026-09-21, answering `429` with an RFC 8594 `Sunset` header;

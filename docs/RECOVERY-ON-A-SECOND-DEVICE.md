@@ -194,9 +194,51 @@ and every one of those was retired or redirected into a retirement by
 2026-09-21. It is now Aleph's own gateway, which is where a fresh Aleph upload
 is certain to be, and it is a list of one: if that host is unreachable from
 where the phone is, the restore has nowhere else to ask. Pass
-`restore: { gateways: [...] }` when you have somewhere better, and watch
-[#112](https://github.com/NiKrause/orbitdb-storage-bridge/issues/112) for the
-path that does not go through a gateway at all.
+`restore: { gateways: [...] }` when you have somewhere better.
+
+**Or skip the gateway.** `restoreFromCID` takes `fetchBytes`, and
+`peer-fetch.js` builds one that goes over libp2p instead — bitswap from the
+peers that hold the blocks. Measured from a real page on 2026-09-23: Pinata 0.73 s to
+dial over `wss` and 0.26 s for the block, Lighthouse 0.58 s over
+`webrtc-direct` and 0.32 s — and **no credential anywhere in it**, while both
+providers' HTTP gateways want that account's key.
+
+```js
+import { createPeerFetch, createGatewayFirstFetch, PINATA_BITSWAP } from
+  "@le-space/orbitdb-storage-bridge/peer-fetch";
+import { fetchFromGateways } from "@le-space/orbitdb-storage-bridge/gateway-fetch";
+
+const viaPeers = createPeerFetch({ helia, providers: [PINATA_BITSWAP] });
+
+await hydrate({
+  orbitdb, seed,
+  restore: {
+    // HTTP while it is warm — 0.2 s beats 1 s — and peers the moment it is not.
+    fetchBytes: createGatewayFirstFetch({
+      viaGateway: fetchFromGateways,
+      viaPeers,
+      gatewayTimeout: 3000,
+      onPath: (path, info) => console.info(`${path} delivered in ${info.ms} ms`),
+    }),
+  },
+});
+```
+
+Two things to know before wiring it up:
+
+- **The Helia doing this needs bitswap**, and a fetch-only node wants
+  `addresses: { listen: [] }` — Helia's browser defaults try to listen on
+  `/webrtc` and `/p2p-circuit` and throw on start when no transport serves
+  them.
+- **Name the providers deliberately.** There is no default list, because a page
+  that dials a service it never uploaded to is telling that service what its
+  reader is looking for. `PINATA_BITSWAP` and `ALEPH_BITSWAP` are constants;
+  `providersFor(cid)` asks a router for anyone else.
+- **Which router knows what.** `cid.contact` is an IPNI index and answers a
+  browser with CORS, but it does not know Aleph's CIDs — Aleph announces over
+  the DHT, where only `delegated-ipfs.dev` looks, and that one sends no CORS
+  header for provider lookups. So from a page, a lookup finds Pinata and
+  Lighthouse, and Aleph is reached through its constant.
 
 ## What this does not promise
 

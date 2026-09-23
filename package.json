@@ -16,6 +16,7 @@
     "./dehydrate": "./lib/dehydrate.js",
     "./restore-cid": "./lib/restore-cid.js",
     "./gateway-fetch": "./lib/gateway-fetch.js",
+  "./peer-fetch": "./lib/peer-fetch.js",
     "./backends/types": "./lib/backends/types.js",
     "./backends/memory": "./lib/backends/memory.js",
     "./backends/storacha": "./lib/backends/storacha.js",
