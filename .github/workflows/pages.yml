@@ -1,0 +1,96 @@
+# The browser examples, published so they can be opened rather than described.
+#
+# Nothing here is built: these pages are static on purpose, so what is deployed
+# is byte for byte what a reader gets by opening the file from a checkout. That
+# is also what makes the storage probe worth trusting — it measures a browser
+# talking to a service, with no bundler in between.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/browser/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Assemble
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect the browser examples
+        run: |
+          mkdir -p pages
+          cp -R examples/browser/. pages/
+          cat > pages/index.html <<'HTML'
+          <!doctype html>
+          <!-- SPDX-License-Identifier: MIT -->
+          <html lang="en">
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
+              <title>Browser examples</title>
+              <style>
+                :root { color-scheme: light dark; }
+                body { font: 16px/1.6 system-ui, sans-serif; margin: 0 auto; padding: 48px 20px; max-width: 42rem; }
+                h1 { font-size: 1.4rem; }
+                p { color: GrayText; }
+                a { color: inherit; }
+              </style>
+            </head>
+            <body>
+              <h1>orbitdb-storage-bridge — browser examples</h1>
+              <p>Pages that measure this package from a browser, with no server and no build step.</p>
+              <ul>
+                <li>
+                  <a href="./storage-probe/">Storage probe</a>
+                  — whether Aleph, Pinata and Lighthouse answer a page, whether their CORS lets a
+                  static site upload, and who on IPFS holds a CID at an address a browser can dial.
+                </li>
+              </ul>
+            </body>
+          </html>
+          HTML
+
+      - name: Check nothing needs a build step
+        run: |
+          # A page that reaches for a bundler or a CDN is one a reader cannot
+          # verify by opening the file. Import maps and bare specifiers are how
+          # that creeps in.
+          if grep -rn 'type="importmap"' pages/; then
+            echo "::error::an import map means the page depends on a rewrite step"
+            exit 1
+          fi
+          if grep -rnE 'from "(https?:)?//|from "[a-z@]' pages/ --include='*.html' --include='*.js'; then
+            echo "::error::a bare or remote import: these pages import only what sits beside them"
+            exit 1
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

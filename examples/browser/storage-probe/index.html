@@ -1,0 +1,682 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Storage probe</title>
+    <meta
+      name="description"
+      content="Checks from a real page whether Pinata and Lighthouse can be reached without a server, and whether anybody on IPFS holds a CID at an address a browser can dial."
+    />
+    <meta name="robots" content="noindex" />
+    <!-- Before the first paint: the language (the address, then the last choice,
+         then the browser) and a theme chosen earlier — probe-ui.js keeps both. -->
+    <script>
+      (function(){var d=document.documentElement,s=function(k){try{return localStorage.getItem(k)}catch(e){return null}},q=new URLSearchParams(location.search).get("lang"),l=q==="de"||q==="en"?q:s("storage-probe:lang");if(l!=="de"&&l!=="en"){l="en";var a=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language];for(var i=0;i<a.length;i++){if(/^de\b/i.test(a[i])){l="de";break}if(/^en\b/i.test(a[i]))break}}d.lang=l;var t=s("storage-probe:theme");if(t==="dark"||t==="light")d.dataset.theme=t})();
+    </script>
+    <style>
+      /* Light by default, dark when the system asks or the toggle says so.
+         Three states, not two: an explicit choice stamps data-theme, and the
+         common case stamps nothing at all. */
+      :root {
+        --bg: #fbfaf8;
+        --panel: #ffffff;
+        --ink: #1a1a1c;
+        --ink-2: #55555c;
+        --ink-3: #74747c;
+        --line: #e0dedb;
+        --accent: #0b6b57;
+        --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+        --good: #12694b;
+        --good-soft: color-mix(in srgb, var(--good) 12%, transparent);
+        --bad: #a52020;
+        --bad-soft: color-mix(in srgb, var(--bad) 12%, transparent);
+        --warn: #8a5a00;
+        --warn-soft: color-mix(in srgb, var(--warn) 14%, transparent);
+        --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #15161a;
+          --panel: #1d1f24;
+          --ink: #eceef2;
+          --ink-2: #a8adb8;
+          --ink-3: #8b909b;
+          --line: #2e3138;
+          --accent: #4fd1ab;
+          --good: #46c78f;
+          --bad: #ff7a70;
+          --warn: #e0a54a;
+        }
+      }
+      :root[data-theme="dark"] {
+        --bg: #15161a;
+        --panel: #1d1f24;
+        --ink: #eceef2;
+        --ink-2: #a8adb8;
+        --ink-3: #8b909b;
+        --line: #2e3138;
+        --accent: #4fd1ab;
+        --good: #46c78f;
+        --bad: #ff7a70;
+        --warn: #e0a54a;
+      }
+      /* Came from the brand stylesheet, and the page cannot work without it:
+         both languages are in the markup, and this is what hides one. */
+      [data-lang]:not([data-lang=""]) { display: none; }
+      :root:lang(en) [data-lang="en"], :root:lang(de) [data-lang="de"] { display: revert; }
+      .page-controls {
+        position: fixed;
+        top: 10px;
+        right: 12px;
+        display: flex;
+        gap: 6px;
+        z-index: 2;
+      }
+      .chip {
+        font-size: 1rem;
+        line-height: 1;
+        padding: 7px 9px;
+        border-radius: 999px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        color: var(--ink);
+        cursor: pointer;
+      }
+      * { box-sizing: border-box; }
+      a { color: var(--accent); }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--font);
+        line-height: 1.55;
+      }
+      /* Room at the top for the language and theme buttons. */
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 56px 16px 64px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      h1 { font-size: 1.5rem; margin: 0; text-wrap: balance; }
+      h2 { font-size: 1rem; margin: 0 0 8px; }
+      p { margin: 0; }
+      .lede { color: var(--ink-2); }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .steps { display: grid; gap: 8px; }
+      button {
+        font: inherit;
+        font-weight: 600;
+        text-align: left;
+        padding: 12px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--accent-soft);
+        color: var(--accent);
+        cursor: pointer;
+      }
+      button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      button:disabled { opacity: 0.5; cursor: progress; }
+      button small { display: block; font-weight: 400; color: var(--ink-2); }
+      .mono { font-family: var(--font-mono); font-size: 0.85rem; }
+      /* Stacked on a phone, which is the only place this page is used: side by
+         side, the longest label takes the width and a fingerprint — the thing
+         being compared — breaks across lines. */
+      dl { display: grid; grid-template-columns: 1fr; margin: 0; }
+      dt { color: var(--ink-2); font-size: 0.75rem; margin-top: 8px; }
+      dt:first-child { margin-top: 0; }
+      dd { margin: 0; overflow-wrap: anywhere; }
+      @media (min-width: 560px) {
+        dl { grid-template-columns: max-content 1fr; gap: 4px 12px; }
+        dt { font-size: inherit; margin-top: 0; }
+      }
+      .log { display: flex; flex-direction: column; gap: 8px; }
+      .entry { border-left: 3px solid var(--line); padding: 6px 10px; border-radius: 4px; }
+      .entry.good { border-color: var(--good); background: var(--good-soft); }
+      .entry.bad { border-color: var(--bad); background: var(--bad-soft); }
+      .entry.warn { border-color: var(--warn); background: var(--warn-soft); }
+      .entry b { display: block; }
+      .fp { font-family: var(--font-mono); font-size: 1.15rem; letter-spacing: 0.04em; }
+      table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+      th, td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+      .scroll { overflow-x: auto; }
+      .field { display: flex; flex-direction: column; gap: 5px; margin: 10px 0; font-size: 0.85rem; color: var(--ink-2); }
+      .field input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 0.85rem; }
+      .check { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0; font-size: 0.85rem; color: var(--ink-2); }
+      .warn-note { border-left: 3px solid var(--warn, #a86412); padding-left: 10px; }
+      .addr-list { margin: 6px 0 0; padding-left: 16px; font-family: var(--font-mono); font-size: 0.72rem; overflow-wrap: anywhere; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="panel">
+        <h1><span data-lang="en">Storage probe</span><span data-lang="de">Speicher-Probe</span></h1>
+        <p class="lede" data-lang="en">
+          Two questions that decide whether the recovery page can offer more than one storage
+          service, and whether a backup can still be fetched when a gateway will not answer:
+          <b>do Pinata and Lighthouse talk to a page at all</b> (CORS, without a server of ours),
+          and <b>does anybody on IPFS hold a CID at an address a browser can dial</b>?
+        </p>
+        <p class="lede" data-lang="de">
+          Zwei Fragen, die entscheiden, ob die Recovery-Seite mehr als einen Speicherdienst
+          anbieten kann und ob eine Sicherung auch dann erreichbar ist, wenn ein Gateway
+          schweigt: <b>Sprechen Pinata und Lighthouse überhaupt mit einer Seite</b> (CORS, ohne
+          Server von uns), und <b>hält irgendwer im IPFS-Netz eine CID unter einer Adresse, die
+          ein Browser wählen kann</b>?
+        </p>
+        <p class="lede" data-lang="en">
+          The CORS checks need <b>no credentials</b>: they are sent with a deliberately invalid
+          key. A browser blocks a cross-origin request before it is answered, so an answer of any
+          kind — even <span class="mono">401</span> — is the proof, and a blocked request is the
+          refusal. A real upload is a separate step further down, with a key you paste yourself.
+        </p>
+        <p class="lede" data-lang="de">
+          Die CORS-Prüfungen brauchen <b>keine Zugangsdaten</b>: Sie gehen mit einem absichtlich
+          ungültigen Schlüssel hinaus. Ein Browser blockiert eine fremde Anfrage, bevor sie
+          beantwortet wird — jede Antwort, auch <span class="mono">401</span>, ist also der
+          Beweis, und eine blockierte Anfrage ist die Absage. Ein echter Upload ist ein eigener
+          Schritt weiter unten, mit einem Schlüssel, den nur du einfügst.
+        </p>
+        <p class="lede" data-lang="en">
+          <b>CORS is decided per origin.</b> What this page measures counts for the address in the
+          bar below, and a result from <span class="mono">localhost</span> says little about
+          <span class="mono">nikrause.github.io</span>.
+        </p>
+        <p class="lede" data-lang="de">
+          <b>CORS gilt pro Herkunft.</b> Was diese Seite misst, gilt für die Adresse unten, und
+          ein Ergebnis von <span class="mono">localhost</span> sagt wenig über
+          <span class="mono">nikrause.github.io</span>.
+        </p>
+      </header>
+
+      <section class="panel" aria-labelledby="env-h">
+        <h2 id="env-h"><span data-lang="en">This page</span><span data-lang="de">Diese Seite</span></h2>
+        <dl class="mono" id="env"></dl>
+      </section>
+
+      <section class="panel" aria-labelledby="steps-h">
+        <h2 id="steps-h"><span data-lang="en">Steps</span><span data-lang="de">Schritte</span></h2>
+        <label class="field">
+          <span data-lang="en">A CID to ask about — the one the recovery page shows under <i>backup</i>, or any other</span>
+          <span data-lang="de">Eine CID zum Nachfragen — die, die die Recovery-Seite unter <i>Sicherung</i> zeigt, oder eine andere</span>
+          <input id="cid" class="mono" value="QmT78zSuBmuS4z925WZfrqQ1qHaJ56DQaTfyMUF7F8ff5o" spellcheck="false" />
+        </label>
+        <div class="steps">
+          <button id="control" type="button">
+            <span data-lang="en">1 · Control: Aleph's gateway
+              <small>What the demo uses today. If this is blocked too, the network is, and nothing below means anything.</small></span>
+            <span data-lang="de">1 · Kontrolle: Alephs Gateway
+              <small>Was die Demo heute benutzt. Ist auch das blockiert, liegt es am Netz, und nichts weiter unten bedeutet etwas.</small></span>
+          </button>
+          <button id="pinata" type="button">
+            <span data-lang="en">2 · Pinata: does it answer a page? (invalid key)
+              <small>Measures CORS, not your key: it goes out with a deliberately invalid one. Your own key is step 5.</small></span>
+            <span data-lang="de">2 · Pinata: antwortet es einer Seite? (ungültiger Schlüssel)
+              <small>Misst CORS, nicht deinen Schlüssel: Der Aufruf geht mit einem absichtlich ungültigen hinaus. Dein eigener Schlüssel ist Schritt 5.</small></span>
+          </button>
+          <button id="lighthouse" type="button">
+            <span data-lang="en">3 · Lighthouse: does it answer a page? (invalid key)
+              <small>The same two, against Lighthouse. Your own key is step 6.</small></span>
+            <span data-lang="de">3 · Lighthouse: antwortet es einer Seite? (ungültiger Schlüssel)
+              <small>Dieselben zwei, gegen Lighthouse. Dein eigener Schlüssel ist Schritt 6.</small></span>
+          </button>
+          <button id="providers" type="button">
+            <span data-lang="en">4 · Who holds this CID, and can a browser dial them?
+              <small>Asks both routers, and counts the addresses a page could actually use.</small></span>
+            <span data-lang="de">4 · Wer hält diese CID, und kann ein Browser sie wählen?
+              <small>Fragt beide Router und zählt die Adressen, die eine Seite wirklich nutzen kann.</small></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="log-h">
+        <h2 id="log-h"><span data-lang="en">Results</span><span data-lang="de">Ergebnisse</span></h2>
+        <div class="log" id="log" aria-live="polite">
+          <p class="lede"><span data-lang="en">Nothing measured yet.</span><span data-lang="de">Noch nichts gemessen.</span></p>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="key-h">
+        <h2 id="key-h"><span data-lang="en">Optional: a real upload, with your own key</span><span data-lang="de">Optional: ein echter Upload, mit deinem eigenen Schlüssel</span></h2>
+        <p class="lede" data-lang="en">
+          A key pasted here stays in this browser's <span class="mono">localStorage</span> and is
+          sent to that vendor and nowhere else — this page has no server. It is also
+          <b>unscoped</b>: whoever has it can list and delete everything in that account. Use a key
+          you can revoke.
+        </p>
+        <p class="lede" data-lang="de">
+          Ein hier eingefügter Schlüssel bleibt im <span class="mono">localStorage</span> dieses
+          Browsers und geht nur an diesen Anbieter — diese Seite hat keinen Server. Er ist
+          außerdem <b>unbeschränkt</b>: Wer ihn hat, kann in dem Konto alles auflisten und löschen.
+          Nimm einen Schlüssel, den du widerrufen kannst.
+        </p>
+        <p class="lede warn-note" data-lang="en">
+          <b>Lighthouse is pay once, kept for ever, and deleting refunds nothing.</b> Every upload
+          here spends real money on permanent storage. Do not run it on somebody else's key.
+        </p>
+        <p class="lede warn-note" data-lang="de">
+          <b>Lighthouse zahlt einmalig, behält für immer, und Löschen erstattet nichts.</b> Jeder
+          Upload hier gibt echtes Geld für dauerhaften Speicher aus. Nicht mit fremden Schlüsseln
+          ausführen.
+        </p>
+        <label class="field">
+          <span class="mono">Pinata JWT</span>
+          <input id="pinata-key" type="password" class="mono" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span class="mono">Lighthouse API key</span>
+          <input id="lighthouse-key" type="password" class="mono" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="check">
+          <input id="understood" type="checkbox" />
+          <span data-lang="en">I understand that these uploads are real, and that Lighthouse keeps what it is given and refunds nothing.</span>
+          <span data-lang="de">Mir ist klar, dass diese Uploads echt sind und dass Lighthouse behält, was es bekommt, und nichts erstattet.</span>
+        </label>
+        <div class="steps">
+          <button id="upload-pinata" type="button">
+            <span data-lang="en">5 · Upload 32 bytes to Pinata, then read them back<small>Uses the key above.</small></span>
+            <span data-lang="de">5 · 32 Bytes zu Pinata hochladen und zurücklesen<small>Benutzt den Schlüssel oben.</small></span>
+          </button>
+          <button id="upload-lighthouse" type="button">
+            <span data-lang="en">6 · Upload 32 bytes to Lighthouse, then read them back<small>Spends money. Uses the key above.</small></span>
+            <span data-lang="de">6 · 32 Bytes zu Lighthouse hochladen und zurücklesen<small>Kostet Geld. Benutzt den Schlüssel oben.</small></span>
+          </button>
+          <button id="forget" type="button">
+            <span data-lang="en">Forget both keys<small>Removes them from this browser.</small></span>
+            <span data-lang="de">Beide Schlüssel vergessen<small>Entfernt sie aus diesem Browser.</small></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="read-h">
+        <h2 id="read-h"><span data-lang="en">How to read the result</span><span data-lang="de">So liest man das Ergebnis</span></h2>
+        <div class="scroll" data-lang="en">
+          <table>
+            <thead><tr><th>Observation</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td>A status came back — even <span class="mono">401</span> or <span class="mono">404</span></td><td>CORS is fine for this origin: the browser let the answer through. The status is about the key or the CID, not about reachability.</td></tr>
+              <tr><td><span class="mono">TypeError: Failed to fetch</span></td><td>The browser blocked it. Either no CORS headers, or the host is unreachable from here — the two look identical to a page, which is why step 1 exists.</td></tr>
+              <tr><td>An upload endpoint is blocked, although a <span class="mono">GET</span> to the same host answers</td><td>The service allows the preflight and then forgets the header on its error answer. Measured on Pinata, 23 September 2026: the preflight says <span class="mono">Allow-Origin: *</span>, the <span class="mono">401</span> carries nothing. Only a real upload with a valid key decides whether success answers differently.</td></tr>
+              <tr><td>The same router answers, then is blocked minutes later</td><td>Not your network: <span class="mono">delegated-ipfs.dev</span> sends the CORS header only sometimes on <span class="mono">/providers</span>. Measure more than once, and ask the second router too.</td></tr>
+              <tr><td>Step 1 blocked as well</td><td>The network or this browser is the cause, not the vendor. Nothing else on this page means anything until it passes.</td></tr>
+              <tr><td>Providers found, <b>0</b> browser-dialable</td><td>The bytes are on IPFS but only behind TCP or QUIC. A page cannot fetch them directly, so a gateway stays the only way in.</td></tr>
+              <tr><td>Providers found, some <span class="mono">wss</span>, <span class="mono">webtransport</span> or <span class="mono">webrtc-direct</span></td><td>A browser could dial them and bitswap the blocks — the fallback in <a href="https://github.com/NiKrause/funkpost/issues/127">funkpost#127</a> is possible for this CID.</td></tr>
+              <tr><td>No providers at all</td><td>Nobody announced it, or the router does not know yet. For a fresh upload, retry in a few minutes before concluding anything.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="scroll" data-lang="de">
+          <table>
+            <thead><tr><th>Beobachtung</th><th>Bedeutung</th></tr></thead>
+            <tbody>
+              <tr><td>Ein Status kam zurück — auch <span class="mono">401</span> oder <span class="mono">404</span></td><td>CORS passt für diese Herkunft: Der Browser hat die Antwort durchgelassen. Der Status sagt etwas über Schlüssel oder CID, nicht über Erreichbarkeit.</td></tr>
+              <tr><td><span class="mono">TypeError: Failed to fetch</span></td><td>Der Browser hat blockiert. Entweder fehlen die CORS-Kopfzeilen, oder der Host ist von hier nicht erreichbar — für eine Seite sieht beides gleich aus, und genau dafür gibt es Schritt 1.</td></tr>
+              <tr><td>Ein Upload-Endpunkt ist blockiert, obwohl ein <span class="mono">GET</span> an denselben Host antwortet</td><td>Der Dienst erlaubt den Preflight und vergisst die Kopfzeile dann bei der Fehlerantwort. Gemessen an Pinata am 23. September 2026: Der Preflight sagt <span class="mono">Allow-Origin: *</span>, die <span class="mono">401</span> trägt nichts. Nur ein echter Upload mit gültigem Schlüssel zeigt, ob eine Erfolgsantwort anders ausfällt.</td></tr>
+              <tr><td>Derselbe Router antwortet, Minuten später blockiert er</td><td>Nicht dein Netz: <span class="mono">delegated-ipfs.dev</span> sendet die CORS-Kopfzeile auf <span class="mono">/providers</span> nur manchmal. Mehrfach messen — und den zweiten Router mitfragen.</td></tr>
+              <tr><td>Schritt 1 ebenfalls blockiert</td><td>Dann liegt es am Netz oder an diesem Browser, nicht am Anbieter. Bis Schritt 1 durchgeht, bedeutet der Rest nichts.</td></tr>
+              <tr><td>Provider gefunden, <b>0</b> browser-wählbar</td><td>Die Bytes liegen im IPFS-Netz, aber nur hinter TCP oder QUIC. Eine Seite kann sie nicht direkt holen; ein Gateway bleibt der einzige Weg.</td></tr>
+              <tr><td>Provider gefunden, einige mit <span class="mono">wss</span>, <span class="mono">webtransport</span> oder <span class="mono">webrtc-direct</span></td><td>Ein Browser könnte sie wählen und die Blöcke per Bitswap holen — der Rückfallweg aus <a href="https://github.com/NiKrause/funkpost/issues/127">funkpost#127</a> ist für diese CID möglich.</td></tr>
+              <tr><td>Gar keine Provider</td><td>Niemand hat sie angekündigt, oder der Router weiß es noch nicht. Bei einem frischen Upload erst nach ein paar Minuten erneut fragen.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script type="module">
+      import { lang } from "./probe-ui.js";
+
+      // Exactly the endpoints the bridge's drivers call, so a result here is a
+      // result about the driver and not about a lookalike URL.
+      const ALEPH_GATEWAY = "https://ipfs.aleph.cloud/ipfs";
+      const PINATA_UPLOAD = "https://uploads.pinata.cloud/v3/files";
+      const PINATA_GATEWAY = "https://gateway.pinata.cloud";
+      const LIGHTHOUSE_UPLOAD =
+        "https://upload.lighthouse.storage/api/v0/add?wrap-with-directory=false&cid-version=1";
+      const LIGHTHOUSE_GATEWAY = "https://gateway.lighthouse.storage";
+      /**
+       * Two routers, because one is not a measurement. Measured 2026-09-23:
+       * delegated-ipfs.dev knows far more providers, and sends the CORS header
+       * only sometimes — the same request answered with it and without it minutes
+       * apart. cid.contact sends it every time and knows fewer addresses.
+       */
+      const ROUTERS = ["https://delegated-ipfs.dev", "https://cid.contact"];
+      /** Deliberately not a key. A page is blocked before it is answered, so 401 is the proof. */
+      const INVALID_KEY = "storage-probe-invalid-key";
+      const STORAGE = {
+        pinata: "storage-probe:pinata-jwt",
+        lighthouse: "storage-probe:lighthouse-key",
+      };
+      /** What a browser can dial. Everything else is TCP or QUIC and out of reach here. */
+      const BROWSER_TRANSPORTS = ["/wss", "/tls/ws", "/webtransport", "/webrtc-direct"];
+
+      const WORDS = {
+        en: {
+          origin: "origin", secure: "secure context", browser: "browser", yes: "yes", no: "no",
+          answered: (status, ms) => `answered HTTP ${status} in ${ms} ms — CORS is fine for this origin`,
+          invalidKey: "measured with a deliberately invalid key — this says nothing about your own",
+          keyIsForStep: (step) => `a key is in the field above; step ${step} is what uses it`,
+          ready: (step) => `ready: key and confirmation are there — press step ${step}`,
+          waitingKey: "waiting for a key in the field above",
+          waitingConsent: "waiting for the box above to be ticked",
+          blocked: (error, ms) => `blocked by the browser after ${ms} ms — ${error}`,
+          control: "1 · Aleph gateway", controlOk: "the method works: an answer came back",
+          pinataUpload: "2 · Pinata upload endpoint", pinataGateway: "2 · Pinata gateway",
+          lighthouseUpload: "3 · Lighthouse upload node", lighthouseGateway: "3 · Lighthouse gateway",
+          providers: "4 · Who holds this CID",
+          providerCount: (n) => `${n} provider ${n === 1 ? "record" : "records"}`,
+          dialable: (n) => `${n} browser-dialable ${n === 1 ? "address" : "addresses"} (wss, webtransport, webrtc-direct)`,
+          noProviders: "nobody announced this CID, or the router does not know it yet",
+          examples: "examples",
+          needKey: "no key in the field above", needConsent: "tick the box first — these uploads are real",
+          uploaded: (cid, ms) => `uploaded in ${ms} ms, CID ${cid}`,
+          readBack: (ms) => `read back from the gateway in ${ms} ms, bytes identical`,
+          readMismatch: "read back, but the bytes differ",
+          uploadStep: (name) => `${name}: real upload`, forgot: "both keys removed from this browser",
+          cidMissing: "enter a CID first",
+        },
+        de: {
+          origin: "Herkunft", secure: "sicherer Kontext", browser: "Browser", yes: "ja", no: "nein",
+          answered: (status, ms) => `hat mit HTTP ${status} in ${ms} ms geantwortet — CORS passt für diese Herkunft`,
+          invalidKey: "mit absichtlich ungültigem Schlüssel gemessen — sagt nichts über deinen eigenen",
+          keyIsForStep: (step) => `ein Schlüssel liegt im Feld oben; benutzt wird er in Schritt ${step}`,
+          ready: (step) => `bereit: Schlüssel und Bestätigung liegen vor — Schritt ${step} drücken`,
+          waitingKey: "wartet auf einen Schlüssel im Feld oben",
+          waitingConsent: "wartet darauf, dass das Kästchen oben gesetzt wird",
+          blocked: (error, ms) => `vom Browser blockiert nach ${ms} ms — ${error}`,
+          control: "1 · Aleph-Gateway", controlOk: "die Methode misst richtig: eine Antwort kam zurück",
+          pinataUpload: "2 · Pinata Upload-Endpunkt", pinataGateway: "2 · Pinata Gateway",
+          lighthouseUpload: "3 · Lighthouse Upload-Knoten", lighthouseGateway: "3 · Lighthouse Gateway",
+          providers: "4 · Wer hält diese CID",
+          providerCount: (n) => `${n} Provider-${n === 1 ? "Eintrag" : "Einträge"}`,
+          dialable: (n) => `${n} browser-wählbare ${n === 1 ? "Adresse" : "Adressen"} (wss, webtransport, webrtc-direct)`,
+          noProviders: "niemand hat diese CID angekündigt, oder der Router kennt sie noch nicht",
+          examples: "Beispiele",
+          needKey: "kein Schlüssel im Feld oben", needConsent: "erst das Kästchen setzen — diese Uploads sind echt",
+          uploaded: (cid, ms) => `hochgeladen in ${ms} ms, CID ${cid}`,
+          readBack: (ms) => `vom Gateway zurückgelesen in ${ms} ms, Bytes identisch`,
+          readMismatch: "zurückgelesen, aber die Bytes weichen ab",
+          uploadStep: (name) => `${name}: echter Upload`, forgot: "beide Schlüssel aus diesem Browser entfernt",
+          cidMissing: "erst eine CID eintragen",
+        },
+      };
+      const w = () => WORDS[lang.get()] ?? WORDS.en;
+      const $ = (id) => document.getElementById(id);
+
+      let first = true;
+      function log(kind, title, rows = []) {
+        const box = $("log");
+        if (first) { box.textContent = ""; first = false; }
+        const entry = document.createElement("div");
+        entry.className = `entry ${kind}`;
+        const b = document.createElement("b");
+        b.textContent = `${new Date().toLocaleTimeString()} · ${title}`;
+        entry.append(b);
+        if (rows.length) {
+          const dl = document.createElement("dl");
+          dl.className = "mono";
+          for (const [key, value] of rows) {
+            const dt = document.createElement("dt");
+            dt.textContent = key;
+            const dd = document.createElement("dd");
+            dd.textContent = value;
+            dl.append(dt, dd);
+          }
+          entry.append(dl);
+        }
+        box.prepend(entry);
+      }
+
+      /**
+       * One request, and the only thing that matters: did an answer come back at
+       * all? A page cannot read CORS headers, so the answer itself is the evidence.
+       */
+      async function measure(url, init = {}) {
+        const started = performance.now();
+        try {
+          const response = await fetch(url, init);
+          return { ok: true, status: response.status, ms: Math.round(performance.now() - started), response };
+        } catch (error) {
+          return { ok: false, error: `${error.name}: ${error.message}`, ms: Math.round(performance.now() - started) };
+        }
+      }
+
+      const report = (title, result, extra = []) =>
+        log(
+          result.ok ? "good" : "bad",
+          title,
+          [[result.ok ? "CORS" : "—", result.ok ? w().answered(result.status, result.ms) : w().blocked(result.error, result.ms)], ...extra],
+        );
+
+      const probeBody = () => {
+        const form = new FormData();
+        form.append("file", new File([new Uint8Array(32)], "storage-probe.bin", { type: "application/octet-stream" }));
+        return form;
+      };
+
+      const cid = () => $("cid").value.trim();
+
+      function guarded(button, run) {
+        button.addEventListener("click", () => {
+          button.disabled = true;
+          run().finally(() => (button.disabled = false));
+        });
+      }
+
+      guarded($("control"), async () => {
+        if (!cid()) return log("warn", w().control, [["—", w().cidMissing]]);
+        const result = await measure(`${ALEPH_GATEWAY}/${cid()}`);
+        report(w().control, result, result.ok ? [["→", w().controlOk]] : []);
+      });
+
+      /** What a CORS step adds, so nobody reads it as a verdict on their own key. */
+      const keyNote = (field, step) => [
+        ["—", w().invalidKey],
+        ...($(field).value.trim() ? [["→", w().keyIsForStep(step)]] : []),
+      ];
+
+      guarded($("pinata"), async () => {
+        const form = probeBody();
+        form.append("network", "public");
+        form.append("name", "storage-probe");
+        report(
+          w().pinataUpload,
+          await measure(PINATA_UPLOAD, { method: "POST", headers: { Authorization: `Bearer ${INVALID_KEY}` }, body: form }),
+          keyNote("pinata-key", 5),
+        );
+        if (cid()) report(w().pinataGateway, await measure(`${PINATA_GATEWAY}/ipfs/${cid()}`));
+      });
+
+      guarded($("lighthouse"), async () => {
+        report(
+          w().lighthouseUpload,
+          await measure(LIGHTHOUSE_UPLOAD, { method: "POST", headers: { Authorization: `Bearer ${INVALID_KEY}` }, body: probeBody() }),
+          keyNote("lighthouse-key", 6),
+        );
+        if (cid()) report(w().lighthouseGateway, await measure(`${LIGHTHOUSE_GATEWAY}/ipfs/${cid()}`));
+      });
+
+      guarded($("providers"), async () => {
+        if (!cid()) return log("warn", w().providers, [["—", w().cidMissing]]);
+        for (const router of ROUTERS) await askRouter(router);
+      });
+
+      async function askRouter(router) {
+        const title = `${w().providers} · ${new URL(router).host}`;
+        const result = await measure(`${router}/routing/v1/providers/${cid()}`, {
+          headers: { Accept: "application/json" },
+        });
+        if (!result.ok) return report(title, result);
+
+        const text = await result.response.text();
+        const records = [];
+        for (const line of text.split("\n")) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line);
+            records.push(...(parsed.Providers ?? [parsed]));
+          } catch {
+            // a line that is not JSON is not a provider record
+          }
+        }
+        const dialable = records
+          .flatMap((record) => record.Addrs ?? [])
+          .filter((address) => BROWSER_TRANSPORTS.some((transport) => address.includes(transport)));
+        log(
+          dialable.length > 0 ? "good" : records.length > 0 ? "warn" : "bad",
+          title,
+          [
+            ["CORS", w().answered(result.status, result.ms)],
+            ["→", records.length > 0 ? w().providerCount(records.length) : w().noProviders],
+            ["→", w().dialable(dialable.length)],
+            ...(dialable.length > 0 ? [[w().examples, dialable.slice(0, 3).join("\n")]] : []),
+          ],
+        );
+      }
+
+      // ── the optional half: a real upload, with a key the reader pasted ──
+      const read = (key) => { try { return localStorage.getItem(key) ?? ""; } catch { return ""; } };
+      const write = (key, value) => { try { value ? localStorage.setItem(key, value) : localStorage.removeItem(key); } catch { /* private mode */ } };
+
+      for (const [name, id] of [["pinata", "pinata-key"], ["lighthouse", "lighthouse-key"]]) {
+        $(id).value = read(STORAGE[name]);
+        $(id).addEventListener("input", () => write(STORAGE[name], $(id).value.trim()));
+      }
+      /**
+       * The real upload steps say what they are waiting for before they are
+       * pressed. Somebody who has pasted a key should not have to click to find
+       * out that a box is unticked — that is how step 2 gets mistaken for step 5.
+       */
+      function refreshReadiness() {
+        for (const [field, button, step] of [
+          ["pinata-key", "upload-pinata", 5],
+          ["lighthouse-key", "upload-lighthouse", 6],
+        ]) {
+          const hasKey = Boolean($(field).value.trim());
+          const consented = $("understood").checked;
+          const note = !hasKey ? w().waitingKey : !consented ? w().waitingConsent : w().ready(step);
+          $(button).disabled = !hasKey || !consented;
+          $(button).title = note;
+          let line = $(`${button}-note`);
+          if (!line) {
+            line = document.createElement("p");
+            line.id = `${button}-note`;
+            line.className = "lede";
+            $(button).after(line);
+          }
+          line.textContent = note;
+        }
+      }
+      for (const id of ["pinata-key", "lighthouse-key"]) $(id).addEventListener("input", refreshReadiness);
+      $("understood").addEventListener("change", refreshReadiness);
+      lang.subscribe(() => refreshReadiness());
+
+      $("forget").addEventListener("click", () => {
+        for (const name of Object.keys(STORAGE)) write(STORAGE[name], "");
+        $("pinata-key").value = "";
+        $("lighthouse-key").value = "";
+        refreshReadiness();
+        log("good", w().forgot);
+      });
+
+      /** 32 random bytes, so a read-back proves the round trip rather than a cache. */
+      const payload = () => crypto.getRandomValues(new Uint8Array(32));
+      const same = (a, b) => a.length === b.length && a.every((byte, index) => byte === b[index]);
+
+      async function realUpload({ title, key, url, gateway, extraFields, cidOf }) {
+        if (!key) return log("warn", title, [["—", w().needKey]]);
+        if (!$("understood").checked) return log("warn", title, [["—", w().needConsent]]);
+        const bytes = payload();
+        const form = new FormData();
+        form.append("file", new File([bytes], "storage-probe.bin", { type: "application/octet-stream" }));
+        for (const [field, value] of extraFields) form.append(field, value);
+
+        const sent = await measure(url, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: form });
+        if (!sent.ok || sent.status >= 400) return report(title, sent);
+
+        const uploaded = cidOf(await sent.response.json().catch(() => ({})));
+        log("good", title, [["→", w().uploaded(uploaded ?? "—", sent.ms)]]);
+        if (!uploaded) return;
+
+        const back = await measure(`${gateway}/ipfs/${uploaded}`);
+        if (!back.ok || back.status >= 400) return report(title, back);
+        const got = new Uint8Array(await back.response.arrayBuffer());
+        log(same(got, bytes) ? "good" : "bad", title, [["→", same(got, bytes) ? w().readBack(back.ms) : w().readMismatch]]);
+      }
+
+      guarded($("upload-pinata"), () =>
+        realUpload({
+          title: w().uploadStep("Pinata"),
+          key: $("pinata-key").value.trim(),
+          url: PINATA_UPLOAD,
+          gateway: PINATA_GATEWAY,
+          extraFields: [["network", "public"], ["name", "storage-probe"]],
+          cidOf: (body) => body?.data?.cid ?? body?.cid ?? null,
+        }),
+      );
+
+      guarded($("upload-lighthouse"), () =>
+        realUpload({
+          title: w().uploadStep("Lighthouse"),
+          key: $("lighthouse-key").value.trim(),
+          url: LIGHTHOUSE_UPLOAD,
+          gateway: LIGHTHOUSE_GATEWAY,
+          extraFields: [],
+          cidOf: (body) => body?.Hash ?? body?.cid ?? null,
+        }),
+      );
+
+      function describeEnvironment() {
+        const rows = [
+          [w().origin, location.origin],
+          [w().secure, String(window.isSecureContext)],
+          [w().browser, navigator.userAgent],
+        ];
+        const dl = $("env");
+        dl.textContent = ""; // drawn again when the language changes
+        for (const [key, value] of rows) {
+          const dt = document.createElement("dt");
+          dt.textContent = key;
+          const dd = document.createElement("dd");
+          dd.textContent = value;
+          dl.append(dt, dd);
+        }
+      }
+      lang.subscribe(() => describeEnvironment());
+    </script>
+    <script type="module">
+      import { mountControls, lang } from "./probe-ui.js";
+
+      const HEAD = {
+        en: {
+          title: "Storage probe",
+          description:
+            "Checks from a real page whether Pinata and Lighthouse can be reached without a server, and whether anybody on IPFS holds a CID at an address a browser can dial.",
+        },
+        de: {
+          title: "Speicher-Probe",
+          description:
+            "Prüft von einer echten Seite aus, ob Pinata und Lighthouse ohne Server erreichbar sind und ob jemand im IPFS-Netz eine CID unter einer browser-wählbaren Adresse hält.",
+        },
+      };
+      lang.subscribe((code) => {
+        document.title = HEAD[code].title;
+        document.querySelector('meta[name="description"]').setAttribute("content", HEAD[code].description);
+      });
+      mountControls();
+    </script>
+  </body>
+</html>
