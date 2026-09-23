@@ -26,6 +26,23 @@
   what the move left behind: MIT, no GPL import, no retired gateway, and the CSS rule that hides
   one of the two languages.
 
+- **`@le-space/orbitdb-storage-bridge/peer-fetch`: fetch a CID from the peers that hold it**,
+  for when a gateway will not do. `createPeerFetch({ helia, providers })` returns exactly the
+  `fetchBytes` that `restoreFromCID` already takes, so a restore over libp2p needs no other
+  change; `createGatewayFirstFetch` tries HTTP with a short timeout and hands over to peers when
+  it does not answer, telling the caller which path delivered and how long it took.
+
+  Measured from a real page (Chrome, no build step) on 2026-09-23: 0.73 s to dial Pinata's
+  bitswap endpoint over `wss`, 0.26 s for the block, **no credential anywhere in it** — while the
+  same provider's gateway wants that account's key. From Node with browser transports, Lighthouse
+  answered over `webrtc-direct` in 0.47 s + 0.39 s.
+
+  There is no default provider list. Whoever stores with a service already shares their CIDs with
+  it, so reading from it adds no new party — but a page dialling a service it never uploaded to
+  would be telling that service what its reader is looking for, for nothing. `PINATA_BITSWAP` is
+  a constant because Pinata publishes it in DNS; `providersFor(cid)` asks a router for the rest,
+  and only `cid.contact` answers a browser.
+
 ### Fixed
 - **The retrieval gateways were all retired on the same day** (#111). `ipfs.io` and `dweb.link`
   stopped serving content on 2026-09-21, answering `429` with an RFC 8594 `Sunset` header;

@@ -91,9 +91,10 @@ The gateway those redirects pointed at is gone too. On **2026-09-21** Protocol L
 now redirect to a closed door. Retrieval defaults here are `ipfs.aleph.cloud` — the one free
 path gateway measured still serving arbitrary CIDs on 2026-09-23 — with
 `trustless-gateway.link` available for verifiable single-block requests
-(`Accept: application/vnd.ipld.raw`). One host is not a fallback chain, which is why
-[#112](https://github.com/NiKrause/orbitdb-storage-bridge/issues/112) proposes fetching from
-the providers that hold the blocks instead.
+(`Accept: application/vnd.ipld.raw`). One host is not a fallback chain, which is why `peer-fetch.js` fetches from the providers that
+hold the blocks instead — bitswap over libp2p, measured from a real page at 0.73 s to dial and
+0.26 s for the block, with no credential in the path. See
+[docs/RECOVERY-ON-A-SECOND-DEVICE.md](docs/RECOVERY-ON-A-SECOND-DEVICE.md).
 
 The shutdown is traceable in the open:
 [`upload-service#708`](https://github.com/storacha/upload-service/pull/708) added a `writesDisabled`

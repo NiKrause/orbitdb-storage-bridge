@@ -194,9 +194,46 @@ and every one of those was retired or redirected into a retirement by
 2026-09-21. It is now Aleph's own gateway, which is where a fresh Aleph upload
 is certain to be, and it is a list of one: if that host is unreachable from
 where the phone is, the restore has nowhere else to ask. Pass
-`restore: { gateways: [...] }` when you have somewhere better, and watch
-[#112](https://github.com/NiKrause/orbitdb-storage-bridge/issues/112) for the
-path that does not go through a gateway at all.
+`restore: { gateways: [...] }` when you have somewhere better.
+
+**Or skip the gateway.** `restoreFromCID` takes `fetchBytes`, and
+`peer-fetch.js` builds one that goes over libp2p instead — bitswap from the
+peers that hold the blocks. Measured from a real page on 2026-09-23: 0.73 s to
+dial Pinata's bitswap endpoint over `wss`, 0.26 s for the block, and **no
+credential anywhere in it**, while that same provider's HTTP gateway wants the
+account's key.
+
+```js
+import { createPeerFetch, createGatewayFirstFetch, PINATA_BITSWAP } from
+  "@le-space/orbitdb-storage-bridge/peer-fetch";
+import { fetchFromGateways } from "@le-space/orbitdb-storage-bridge/gateway-fetch";
+
+const viaPeers = createPeerFetch({ helia, providers: [PINATA_BITSWAP] });
+
+await hydrate({
+  orbitdb, seed,
+  restore: {
+    // HTTP while it is warm — 0.2 s beats 1 s — and peers the moment it is not.
+    fetchBytes: createGatewayFirstFetch({
+      viaGateway: fetchFromGateways,
+      viaPeers,
+      gatewayTimeout: 3000,
+      onPath: (path, info) => console.info(`${path} delivered in ${info.ms} ms`),
+    }),
+  },
+});
+```
+
+Two things to know before wiring it up:
+
+- **The Helia doing this needs bitswap**, and a fetch-only node wants
+  `addresses: { listen: [] }` — Helia's browser defaults try to listen on
+  `/webrtc` and `/p2p-circuit` and throw on start when no transport serves
+  them.
+- **Name the providers deliberately.** There is no default list, because a page
+  that dials a service it never uploaded to is telling that service what its
+  reader is looking for. `providersFor(cid)` asks a router when the provider is
+  not known in advance; only `cid.contact` answers a browser.
 
 ## What this does not promise
 
