@@ -68,12 +68,14 @@ describe("which addresses a page could open", () => {
     }
   });
 
-  test("the browser router list is the one that answers a browser", () => {
-    // delegated-ipfs.dev knows more (it has Aleph's CIDs, cid.contact does
-    // not) and sends no CORS for provider lookups, so it belongs in the list
-    // a Node caller uses and not in the default.
-    expect(DEFAULT_ROUTERS).toEqual(["https://cid.contact"]);
-    expect(ALL_ROUTERS).toContain("https://delegated-ipfs.dev");
+  test("both routers are asked, because they know different things", () => {
+    // cid.contact is an IPNI index; a CID Aleph holds appears only at
+    // delegated-ipfs.dev, which announces over the DHT. Asking one is asking
+    // half the network — and both do send CORS, which an earlier version of
+    // this test asserted the other way round from a single request.
+    expect(DEFAULT_ROUTERS).toContain("https://cid.contact");
+    expect(DEFAULT_ROUTERS).toContain("https://delegated-ipfs.dev");
+    expect(ALL_ROUTERS).toEqual(DEFAULT_ROUTERS);
   });
 });
 

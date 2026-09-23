@@ -1,5 +1,22 @@
 # Changes
 
+## Unreleased
+
+### Fixed
+- **`createPeerFetch` needs `identify`, and the documentation did not say so.** A node built with
+  `withLibp2pLight` dials the provider successfully and then fetches nothing: without `identify`,
+  bitswap never learns that the peer speaks bitswap, no want is sent, and the call fails with
+  "Failed to load block" after the full timeout. Measured against Aleph over one dialled
+  connection: 60 s of nothing without it, **1.6 s for 400 kB with it**. The module docstring now
+  carries the whole libp2p configuration a caller needs.
+
+- **`DEFAULT_ROUTERS` asks both routers.** An earlier note here said `delegated-ipfs.dev` sends no
+  CORS for provider lookups; that came from a single request that came back without the header,
+  and repeated from a deployed page it answers with `access-control-allow-origin: *`. The reason
+  to ask both is better than CORS anyway: `cid.contact` is an IPNI index, and a CID Aleph holds
+  appears only at `delegated-ipfs.dev`, because Aleph announces over the DHT. `ALL_ROUTERS` is now
+  the same list and deprecated.
+
 ## 0.12.0 (2026-09-23)
 
 ### Added
