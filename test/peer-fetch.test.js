@@ -219,6 +219,41 @@ describe("fetching over peers", () => {
     expect(asked).toEqual([CID]);
   });
 
+  test("a peer advertised twice is dialled once", async () => {
+    // Aleph offers webrtc-direct and webtransport for the same node. Two
+    // connections to one peer buy nothing and make a peer count read double.
+    const dialled = [];
+    const peer = "12D3KooWaaa";
+    const fetchBytes = createPeerFetch({
+      providers: [
+        `/ip4/1.2.3.4/udp/4001/webrtc-direct/certhash/uEiA/p2p/${peer}`,
+        `/ip4/1.2.3.4/udp/4001/quic-v1/webtransport/certhash/uEiA/p2p/${peer}`,
+      ],
+      dial: async (addr) => dialled.push(addr),
+      cat: cat(),
+    });
+
+    await fetchBytes(CID);
+
+    expect(dialled).toHaveLength(1);
+  });
+
+  test("two different peers are both dialled", async () => {
+    const dialled = [];
+    const fetchBytes = createPeerFetch({
+      providers: [
+        "/dns4/a.example/tcp/443/wss/p2p/12D3KooWaaa",
+        "/dns4/b.example/tcp/443/wss/p2p/12D3KooWbbb",
+      ],
+      dial: async (addr) => dialled.push(addr),
+      cat: cat(),
+    });
+
+    await fetchBytes(CID);
+
+    expect(dialled).toHaveLength(2);
+  });
+
   test("one address failing is fine as long as another answers", async () => {
     const fetchBytes = createPeerFetch({
       providers: ["/dns4/down.example/tcp/443/wss", "/dns4/up.example/tcp/443/wss"],

@@ -10,6 +10,11 @@
   connection: 60 s of nothing without it, **1.6 s for 400 kB with it**. The module docstring now
   carries the whole libp2p configuration a caller needs.
 
+- **One connection per peer, not per address.** A provider usually advertises the same node
+  several times — Aleph offers webrtc-direct and webtransport — and `createPeerFetch` dialled
+  every address in the list, so one provider became two connections and a peer count that read
+  double. It now dials each peer id once.
+
 - **`DEFAULT_ROUTERS` asks both routers.** An earlier note here said `delegated-ipfs.dev` sends no
   CORS for provider lookups; that came from a single request that came back without the header,
   and repeated from a deployed page it answers with `access-control-allow-origin: *`. The reason
