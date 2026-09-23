@@ -188,10 +188,15 @@ const helia = withLibp2pLight(                     // from @helia/libp2p
 await helia.start()   // returns nothing; keep `helia`
 ```
 
-**Restore asks the gateways it is told**, and the default list is from before
-Aleph: `w3s.link` and `storacha.link` first, then `dweb.link` and `ipfs.io` —
-not Aleph's own gateway, the one place a fresh Aleph upload is certain to be.
-After a backup to Aleph, pass `restore: { gateways: ALEPH_GATEWAYS }`, as above.
+**Restore asks the gateways it is told.** The default list used to be from
+before Aleph — `w3s.link` and `storacha.link`, then `dweb.link` and `ipfs.io` —
+and every one of those was retired or redirected into a retirement by
+2026-09-21. It is now Aleph's own gateway, which is where a fresh Aleph upload
+is certain to be, and it is a list of one: if that host is unreachable from
+where the phone is, the restore has nowhere else to ask. Pass
+`restore: { gateways: [...] }` when you have somewhere better, and watch
+[#112](https://github.com/NiKrause/orbitdb-storage-bridge/issues/112) for the
+path that does not go through a gateway at all.
 
 ## What this does not promise
 

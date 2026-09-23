@@ -1,5 +1,35 @@
 # Changes
 
+## Unreleased
+
+### Fixed
+- **The retrieval gateways were all retired on the same day** (#111). `ipfs.io` and `dweb.link`
+  stopped serving content on 2026-09-21, answering `429` with an RFC 8594 `Sunset` header;
+  `w3s.link` and `storacha.link` redirect to the first of those. Between them they were every
+  fallback this package had — in `gateway-fetch.js`, `backends/aleph.js`, `backends/storacha.js`,
+  `backup-car.js`, `ucan-bridge.js` and the bridge's own default — so each chain had one live
+  entry and a dead tail that only showed up when the live one had a bad minute.
+
+  Defaults are now `ipfs.aleph.cloud`, measured on 2026-09-23 as the one free path gateway still
+  serving arbitrary CIDs, and `TRUSTLESS_GATEWAYS` names `trustless-gateway.link` for verifiable
+  single-block requests (`accept: RAW_BLOCK`).
+
+- **A retired gateway no longer costs an afternoon.** `Retry-After: 900` was honoured literally,
+  three times per gateway, so a restore against the old list could wait out hours of retirement
+  notices before failing. A `Sunset` header now retires a gateway for that call, and any wait
+  beyond `MAX_BACKOFF_MS` (30 s) is treated as closed rather than busy. A gateway that announces
+  a sunset and still serves bytes is still used.
+
+### Added
+- `test/gateway-fetch.test.js` — the module had no tests, which is how four dead gateways sat in
+  its default list. 13 of them, all offline: `fetch` and the wait are injected.
+
+- `test/gateway-live.test.js` and a `gateways` job in `live-backends.yml` — the part a unit test
+  cannot know. It uploads one blob through Aleph, keyless, asks every default gateway for it by
+  CID, and fails on an RFC 8594 `Sunset` header, which a gateway publishes weeks before it goes
+  quiet. Checked against the failure it exists for: putting `dweb.link` back in the list turns it
+  red on both counts.
+
 ## 0.10.0 (2026-09-19)
 
 ### Added

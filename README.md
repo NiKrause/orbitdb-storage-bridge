@@ -73,6 +73,16 @@ Verified on 2026-09-05:
 | the widget demo CID linked in the roadmap below | `504` on `w3s.link`, `dweb.link`, `ipfs.io` and `trustless-gateway.link` |
 | `@storacha/client` on npm | last release `2.1.4`, 2026-05-15, not marked deprecated |
 
+The gateway those redirects pointed at is gone too. On **2026-09-21** Protocol Labs retired
+`ipfs.io` and `dweb.link`: both answer `429` with an RFC 8594 `Sunset` header and a link to
+[gatewaychanges.ipfs.io](https://gatewaychanges.ipfs.io/), so `storacha.link` and `w3s.link`
+now redirect to a closed door. Retrieval defaults here are `ipfs.aleph.cloud` — the one free
+path gateway measured still serving arbitrary CIDs on 2026-09-23 — with
+`trustless-gateway.link` available for verifiable single-block requests
+(`Accept: application/vnd.ipld.raw`). One host is not a fallback chain, which is why
+[#112](https://github.com/NiKrause/orbitdb-storage-bridge/issues/112) proposes fetching from
+the providers that hold the blocks instead.
+
 The shutdown is traceable in the open:
 [`upload-service#708`](https://github.com/storacha/upload-service/pull/708) added a `writesDisabled`
 kill switch that makes the eight user-initiated write capabilities
