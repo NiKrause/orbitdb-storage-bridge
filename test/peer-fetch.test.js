@@ -19,7 +19,11 @@ import {
   createPeerFetch,
   createGatewayFirstFetch,
   PINATA_BITSWAP,
+  ALEPH_BITSWAP,
+  ALEPH_PEER_ID,
   BROWSER_TRANSPORTS,
+  DEFAULT_ROUTERS,
+  ALL_ROUTERS,
 } from "../lib/peer-fetch.js";
 
 const CID = "bafkreibjw4ccgiflcijrenzjpiptwsvhrkugkfzryan4wplryxfc6xrlrm";
@@ -52,6 +56,24 @@ describe("which addresses a page could open", () => {
   test("the transports named are the ones a browser has", () => {
     expect(BROWSER_TRANSPORTS).toContain("/wss");
     expect(BROWSER_TRANSPORTS).not.toContain("/tcp");
+  });
+
+  test("every address shipped as a constant is one a page can open", () => {
+    // These were measured from a browser, so a constant that fails this check
+    // is a typo rather than a policy question.
+    expect(isBrowserDialable(PINATA_BITSWAP)).toBe(true);
+    for (const addr of ALEPH_BITSWAP) {
+      expect(isBrowserDialable(addr)).toBe(true);
+      expect(addr).toContain(ALEPH_PEER_ID);
+    }
+  });
+
+  test("the browser router list is the one that answers a browser", () => {
+    // delegated-ipfs.dev knows more (it has Aleph's CIDs, cid.contact does
+    // not) and sends no CORS for provider lookups, so it belongs in the list
+    // a Node caller uses and not in the default.
+    expect(DEFAULT_ROUTERS).toEqual(["https://cid.contact"]);
+    expect(ALL_ROUTERS).toContain("https://delegated-ipfs.dev");
   });
 });
 

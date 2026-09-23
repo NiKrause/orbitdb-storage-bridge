@@ -32,10 +32,18 @@
   change; `createGatewayFirstFetch` tries HTTP with a short timeout and hands over to peers when
   it does not answer, telling the caller which path delivered and how long it took.
 
-  Measured from a real page (Chrome, no build step) on 2026-09-23, both services and both
+  Measured from a real page (Chrome, no build step) on 2026-09-23 — all three services, two
   transports: Pinata 0.73 s to dial over `wss` and 0.26 s for the block, Lighthouse 0.58 s over
-  `webrtc-direct` and 0.32 s. **No credential anywhere in it**, while both providers' HTTP
-  gateways want that account's key and Lighthouse's shared one answers 402.
+  `webrtc-direct` and 0.32 s, Aleph 0.45 s and 0.35 s. **No credential anywhere in it**, while
+  both paid providers' HTTP gateways want that account's key and Lighthouse's shared one
+  answers 402.
+
+  `ALEPH_BITSWAP` exists because Aleph took finding: it publishes no `_dnsaddr` and answers 404
+  to `/api/v0/id`, so the way Pinata is found says it has no peer. Asking a router for the
+  providers of a CID it holds gives `46.255.204.211` — the address `ipfs.aleph.cloud` resolves
+  to — with `webrtc-direct` and `webtransport`. Only `delegated-ipfs.dev` knows it, because Aleph
+  announces over the DHT rather than IPNI, and that router sends no CORS for provider lookups:
+  hence a constant for pages and `ALL_ROUTERS` for Node.
 
   There is no default provider list. Whoever stores with a service already shares their CIDs with
   it, so reading from it adds no new party — but a page dialling a service it never uploaded to

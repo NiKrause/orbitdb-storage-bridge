@@ -232,8 +232,13 @@ Two things to know before wiring it up:
   them.
 - **Name the providers deliberately.** There is no default list, because a page
   that dials a service it never uploaded to is telling that service what its
-  reader is looking for. `providersFor(cid)` asks a router when the provider is
-  not known in advance; only `cid.contact` answers a browser.
+  reader is looking for. `PINATA_BITSWAP` and `ALEPH_BITSWAP` are constants;
+  `providersFor(cid)` asks a router for anyone else.
+- **Which router knows what.** `cid.contact` is an IPNI index and answers a
+  browser with CORS, but it does not know Aleph's CIDs — Aleph announces over
+  the DHT, where only `delegated-ipfs.dev` looks, and that one sends no CORS
+  header for provider lookups. So from a page, a lookup finds Pinata and
+  Lighthouse, and Aleph is reached through its constant.
 
 ## What this does not promise
 
