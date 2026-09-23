@@ -9,19 +9,19 @@ so re-check before committing to one.
 
 The Storacha surface this library uses is small. Every call site, from `lib/` and `src/`:
 
-| What | Call | Sites |
-| --- | --- | --- |
-| Write | `client.uploadFile()` | 4 |
-| Discovery | `client.capability.upload.list()`, `client.capability.blob.list()` | 4 |
-| Delete | `client.capability.upload.remove()`, `client.capability.blob.remove()` | 2 |
-| Identity & delegated auth | `addSpace`, `setCurrentSpace`, `currentSpace`, `addProof`, `agent.did` | 25 |
+| What                      | Call                                                                   | Sites |
+| ------------------------- | ---------------------------------------------------------------------- | ----- |
+| Write                     | `client.uploadFile()`                                                  | 4     |
+| Discovery                 | `client.capability.upload.list()`, `client.capability.blob.list()`     | 4     |
+| Delete                    | `client.capability.upload.remove()`, `client.capability.blob.remove()` | 2     |
+| Identity & delegated auth | `addSpace`, `setCurrentSpace`, `currentSpace`, `addProof`, `agent.did` | 25    |
 
 Around that sits ~7.4k lines of OrbitDB work — block extraction, `zdpu*`↔`bafkre*` CID bridging, CAR
 packing, identity and access-controller preservation, courier-sync — none of which cares who stores
 the bytes. So the requirements for a replacement are:
 
 1. **Byte-exact round trip.** The whole point of the library is that a restored database has the same
-   block CIDs and the same identity. A backend that re-chunks content and hands back *its* CID breaks
+   block CIDs and the same identity. A backend that re-chunks content and hands back _its_ CID breaks
    that; a backend that stores an opaque blob (our CAR) and returns it unchanged does not.
 2. **Node.js and browser.** The Svelte components run in the browser.
 3. **Listing.** Restore currently discovers what exists by listing the space.
@@ -44,18 +44,22 @@ daily that they still hold the data, **Filecoin Pay** streams payment per proven
 the optional CDN.
 
 ```js
-const synapse = Synapse.create({ account, source: '@le-space/orbitdb-storage-bridge', chain: mainnet })
-await synapse.storage.prepare({ pieceSizes: [BigInt(car.byteLength)] })   // deposit + approval, 1 tx
-const { pieceCid, copies } = await synapse.storage.upload(car)            // 2 providers by default
-const bytes = await synapse.storage.download({ pieceCid })
+const synapse = Synapse.create({
+  account,
+  source: "@le-space/orbitdb-storage-bridge",
+  chain: mainnet,
+});
+await synapse.storage.prepare({ pieceSizes: [BigInt(car.byteLength)] }); // deposit + approval, 1 tx
+const { pieceCid, copies } = await synapse.storage.upload(car); // 2 providers by default
+const bytes = await synapse.storage.download({ pieceCid });
 ```
 
-| Our need | Synapse |
-| --- | --- |
-| Write | `synapse.storage.upload(bytes)` → `pieceCid` |
-| Discovery | `synapse.storage.findDataSets()`, then pieces per data set |
-| Delete | `terminateService({ dataSetId })` — ends the rail, provider may then delete |
-| Auth | EIP-712 signatures from a wallet; **session keys** for delegation |
+| Our need  | Synapse                                                                     |
+| --------- | --------------------------------------------------------------------------- |
+| Write     | `synapse.storage.upload(bytes)` → `pieceCid`                                |
+| Discovery | `synapse.storage.findDataSets()`, then pieces per data set                  |
+| Delete    | `terminateService({ dataSetId })` — ends the rail, provider may then delete |
+| Auth      | EIP-712 signatures from a wallet; **session keys** for delegation           |
 
 **Costs.** $2.50/TiB/month/copy with a 2-copy minimum, $0.12/data set/month for proving, a refundable
 ~$0.50 lifecycle reserve per data set, up to $14/TiB egress if FilBeam is enabled, plus a one-time
@@ -116,7 +120,7 @@ Filecoin deals in perpetuity. Roughly **$2–5/GB, once**.
 - **IPNS is built in** (`ipns --generate-key`, `--publish`) — the v0.4.4 "latest-backup pointer" and
   the IPNS-based head discovery in the restore roadmap would come for free instead of being built.
 - Access control by wallet address (`share-file`, `revoke-access`) on top of Kavach threshold
-  encryption, plus token-gated conditions. Not UCAN, but a working delegation story for *reads*.
+  encryption, plus token-gated conditions. Not UCAN, but a working delegation story for _reads_.
 - PODSI proofs, `dealStatus`, an alternative Walrus/Sui backend, an S3-compatible API.
 
 **Limitations**
@@ -130,7 +134,7 @@ Filecoin deals in perpetuity. Roughly **$2–5/GB, once**.
 - **The perpetuity promise is custodial.** It is a company-run endowment pool, not a protocol
   guarantee. Storacha is the reason to weigh that: the pay-once model concentrates all the risk at the
   moment of payment, and there is no rail to stop funding if the operator stops delivering.
-- **Cost model mismatched with rolling backups.** Every timestamped backup is paid for *forever*, even
+- **Cost model mismatched with rolling backups.** Every timestamped backup is paid for _forever_, even
   the ones you would happily expire after a week. Deleting does not refund.
 - **Node CAR upload needs a `.car` file on disk** (the SDK reads a path via `fs-extra` and rejects any
   other extension); the browser path takes a `File`. We build CAR bytes in memory, so Node needs a
@@ -141,11 +145,11 @@ Filecoin deals in perpetuity. Roughly **$2–5/GB, once**.
 **Measured 2026-09-17**, with the driver in `lib/backends/lighthouse.js` and the "Live backends"
 workflow, on an account whose trial had run out:
 
-| | Result |
-| --- | --- |
-| The API key, listing (`api/user/files_uploaded`) | accepted, `200` |
-| Any upload (`api/v0/add`) | `403` "Trial expired — Your trial period has expired. Please upgrade to a paid plan" |
-| The gateway, for a CID it does not hold | answers promptly; reported as not found |
+|                                                  | Result                                                                               |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| The API key, listing (`api/user/files_uploaded`) | accepted, `200`                                                                      |
+| Any upload (`api/v0/add`)                        | `403` "Trial expired — Your trial period has expired. Please upgrade to a paid plan" |
+| The gateway, for a CID it does not hold          | answers promptly; reported as not found                                              |
 
 So uploads, the CAR round trip and a database restore are **not yet verified against a live
 account** — that waits for a paid plan and is tracked in
@@ -175,12 +179,12 @@ through a vendor API and hash preservation stops being something a service could
   contract, `chainId 4217`, recipient:
 
   | file size | `amount` | at 6 decimals | `GB × $0.10 × 12` |
-  | --- | --- | --- | --- |
-  | 1 KB | 1000 | $0.0010 | $0.0000 |
-  | 100 KB | 1000 | $0.0010 | $0.0001 |
-  | 1 MB | 1200 | $0.0012 | $0.0012 |
-  | 100 MB | 117200 | $0.1172 | $0.1172 |
-  | 1 GB | 1200000 | $1.2000 | $1.2000 |
+  | --------- | -------- | ------------- | ----------------- |
+  | 1 KB      | 1000     | $0.0010       | $0.0000           |
+  | 100 KB    | 1000     | $0.0010       | $0.0001           |
+  | 1 MB      | 1200     | $0.0012       | $0.0012           |
+  | 100 MB    | 117200   | $0.1172       | $0.1172           |
+  | 1 GB      | 1200000  | $1.2000       | $1.2000           |
 
   The formula holds exactly from 1 MB up, and a gigabyte is $1.20 as stated. **The floor is $0.001,
   not $0.01** — an earlier reading of this page was out by a factor of ten, and with it the
@@ -205,21 +209,22 @@ endpoints; 25 GB per upload, resumable required above 100 MB; 10 MB for `pinJSON
   **Measured 2026-09-17 on the free plan**, with the driver in `lib/backends/pinata.js` and the
   "Live backends" workflow:
 
-  | | Result |
-  | --- | --- |
-  | Upload, listing, deletion (v3 API) | work |
-  | A CAR uploaded as a plain file | accepted, and comes back byte for byte — the line above did not bite |
-  | Pin by CID | `403` "This feature is not supported by the current plan type" — paid plans only |
-  | Reads through the shared `gateway.pinata.cloud` | `429` during the restore suite, after the conformance suite's reads |
-  | Reads through the account's dedicated gateway | a fresh upload is served within 2–3 s; all 51 conformance and restore tests pass |
-  | A dedicated gateway from a *different* account than the key | `403` "The owner of this gateway does not have this content pinned to their Pinata account" (ERR_ID:00006) for every read, still after 96 s |
-  | A file name with a path (`<space>/backup-…`, as `backupDatabase` names files) | stored as a folder: the upload answers with the folder's CID, and a gateway serves its HTML listing |
+  |                                                                               | Result                                                                                                                                      |
+  | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Upload, listing, deletion (v3 API)                                            | work                                                                                                                                        |
+  | A CAR uploaded as a plain file                                                | accepted, and comes back byte for byte — the line above did not bite                                                                        |
+  | Pin by CID                                                                    | `403` "This feature is not supported by the current plan type" — paid plans only                                                            |
+  | Reads through the shared `gateway.pinata.cloud`                               | `429` during the restore suite, after the conformance suite's reads                                                                         |
+  | Reads through the account's dedicated gateway                                 | a fresh upload is served within 2–3 s; all 51 conformance and restore tests pass                                                            |
+  | A dedicated gateway from a _different_ account than the key                   | `403` "The owner of this gateway does not have this content pinned to their Pinata account" (ERR_ID:00006) for every read, still after 96 s |
+  | A file name with a path (`<space>/backup-…`, as `backupDatabase` names files) | stored as a folder: the upload answers with the folder's CID, and a gateway serves its HTML listing                                         |
 
   So the driver makes pin by CID opt-in (`pinByCid: true`) like CAR import, waits out gateway 429s,
   uploads only the last segment of a file name (the full name stays the upload's `name`), accepts a
   gateway as the bare domain the dashboard shows, and wants the dedicated gateway **of the key's own
   account** as `gateway` for anything beyond a test. The live workflow checks that pairing before
   its suites run.
+
 - A company with an account, a plan and a rate limit. No proofs, no on-chain anything, no way to
   verify a backup exists other than asking them.
 - HTML retrieval needs a dedicated gateway with a custom domain.
@@ -229,11 +234,11 @@ endpoints; 25 GB per upload, resumable required above 100 MB; 10 MB for `pinJSON
 Probed directly on 2026-09-05, because your own `relay-button` and `shared-aleph-tooling` already
 post to these endpoints:
 
-| Endpoint on `ipfs.aleph.cloud` / `ipfs-2.aleph.im` | Result |
-| --- | --- |
-| `POST /api/v0/add` | `400` on an empty body — exists, **no API key**, response carries `access-control-allow-origin: *`, `access-control-allow-credentials: true`, `server: Aleph.im IPFS` |
-| `POST /api/v0/dag/import` | `404` |
-| `POST /api/v0/block/put`, `/dag/put`, `/pin/add`, `/cat`, `/id` | `404` |
+| Endpoint on `ipfs.aleph.cloud` / `ipfs-2.aleph.im`              | Result                                                                                                                                                                |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v0/add`                                              | `400` on an empty body — exists, **no API key**, response carries `access-control-allow-origin: *`, `access-control-allow-credentials: true`, `server: Aleph.im IPFS` |
+| `POST /api/v0/dag/import`                                       | `404`                                                                                                                                                                 |
+| `POST /api/v0/block/put`, `/dag/put`, `/pin/add`, `/cat`, `/id` | `404`                                                                                                                                                                 |
 
 So: **yes, a browser can post to Aleph IPFS directly, with no API key and no proxy.** That answers
 the question this section exists for. Two qualifications, both from the same probe:
@@ -267,20 +272,64 @@ reachable, and a paid backend is the third copy rather than the only one.
 
 A 5 MB database, one timestamped backup a day, one year kept. Assumptions visible so you can redo them.
 
-| | Filecoin Onchain Cloud | Lighthouse |
-| --- | --- | --- |
-| Year-1 data | ~1.8 GB | ~1.8 GB |
-| Storage | ~$0.10/year (2 copies) | $3.60–9.00 **once** |
-| Fixed fees | $1.44/year proving + ~$0.50 refundable reserve | none |
-| Per-backup | one on-chain fee × 365 — **unmeasured, and the number that decides this** | included |
-| Year 2+ | same again | pay again only for new data |
-| Stop paying | data goes | data stays |
+|             | Filecoin Onchain Cloud                                                    | Lighthouse                  |
+| ----------- | ------------------------------------------------------------------------- | --------------------------- |
+| Year-1 data | ~1.8 GB                                                                   | ~1.8 GB                     |
+| Storage     | ~$0.10/year (2 copies)                                                    | $3.60–9.00 **once**         |
+| Fixed fees  | $1.44/year proving + ~$0.50 refundable reserve                            | none                        |
+| Per-backup  | one on-chain fee × 365 — **unmeasured, and the number that decides this** | included                    |
+| Year 2+     | same again                                                                | pay again only for new data |
+| Stop paying | data goes                                                                 | data stays                  |
 
 The crossover: below a few GB kept for many years, Lighthouse's one-time payment beats FOC's fixed
 floor. Above that, or when backups expire and get deleted, FOC's rental model wins. For a single small
 database backed up rarely, Lighthouse is cheaper by an order of magnitude; for a churning
 backup-per-mutation workload, the FOC per-operation fee is the whole cost and has to be measured before
 choosing.
+
+## 8b. Choosing one, or several, from a page
+
+Two pieces sit between the drivers above and an application that lets somebody pick.
+
+**`createBackendFromChoice({ kind, ... })`** turns a name and, where a service needs one, a
+credential into a driver — which is what a page has, since a reader ticks a service and pastes
+their own key. Every vendor module is imported lazily, so a page that chose Aleph ships neither
+the Pinata nor the Lighthouse driver. A missing key is refused there and then, with the service
+named, rather than at the first upload, so a button can be disabled with a reason. `resolveBackend`
+accepts the same `kind`, so there is one decision rather than two.
+
+```js
+const backend = await createBackendFromChoice({
+  kind: "lighthouse",
+  apiKey,
+  keyOwnership: "user",
+});
+```
+
+`keyOwnership: "user"` is not decoration: it is what makes `browserSafeAuth` true, and it is only
+honest when the reader minted that key themselves.
+
+**`createMirrorBackend([...])`** writes one backup to several services and reads it back from
+whichever answers first, behind the same contract, so `dehydrate` and `restoreFromCID` need to know
+nothing about it.
+
+```js
+const backend = await createBackendFromChoice({
+  kind: ["aleph", "lighthouse"],
+  apiKey,
+});
+```
+
+What it promises, and what it refuses to:
+
+|                                                      |                                                                                                                                                                                |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| a partial write                                      | reported, never swallowed: by default one service is enough, and the handle names who holds it and who refused. `require: "all"` when a copy everywhere is the point           |
+| a read                                               | asks in order, stops at the first answer. Not a race — a race spends every service's bandwidth on every read, and on a gateway that bills per request that is somebody's money |
+| `browserSafeAuth`, `carImport`, `preservesInnerCids` | true only when **every** member is, because the weakest one decides what a page leaks                                                                                          |
+| `minBlobSize`                                        | the **largest** of them: a blob has to clear the strictest door                                                                                                                |
+| `pinByCid`                                           | true when **any** member can pin, and only those are asked                                                                                                                     |
+| `list()`, `remove()`                                 | not offered. A listing would be a union with duplicates, and a half-succeeded deletion leaves a copy behind while reporting success. Ask the service you mean                  |
 
 ## 9. Recommendation
 
