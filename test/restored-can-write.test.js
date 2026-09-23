@@ -202,6 +202,8 @@ describe("P11 step 5 — the device that came back is the writer, not a reader",
         seed: SEED,
         label: "step-5",
         backend,
+        // This test is about who may write, not about secrecy.
+        dontEncrypt: true,
         endpoints: routing.endpoints,
       });
 
@@ -268,6 +270,8 @@ describe("P11 step 5 — the device that came back is the writer, not a reader",
         seed: SEED,
         label: "step-5-stranger",
         backend,
+        // This test is about who may write, not about secrecy.
+        dontEncrypt: true,
         endpoints: routing.endpoints,
       });
 

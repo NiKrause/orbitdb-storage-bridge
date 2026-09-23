@@ -26,6 +26,28 @@ import {
   resolvePointer,
 } from "../lib/pointer-ipns.js";
 import { createMemoryBackend } from "../lib/backends/memory.js";
+import { isEncrypted } from "../lib/backends/encryption.js";
+import { webcrypto } from "node:crypto";
+
+/**
+ * What a browser would build from the security key's PRF output: a key that
+ * never leaves the device, and AES-GCM either side of it.
+ */
+async function passkeyShapedCipher(secret = "a secret that never leaves the key") {
+  const raw = await webcrypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
+  const key = await webcrypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+  return {
+    encrypt: async (bytes) => {
+      const iv = webcrypto.getRandomValues(new Uint8Array(12));
+      return {
+        ciphertext: new Uint8Array(await webcrypto.subtle.encrypt({ name: "AES-GCM", iv }, key, bytes)),
+        iv,
+      };
+    },
+    decrypt: async (ciphertext, iv) =>
+      new Uint8Array(await webcrypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext)),
+  };
+}
 import { createHeliaOrbitDB, cleanupOrbitDBDirectories } from "../lib/utils.js";
 
 jest.setTimeout(180_000);
@@ -106,6 +128,69 @@ async function aDatabase(name) {
 const fromBackend = { restore: { fetchBytes: (id) => backend.getBlob(id) } };
 
 describe("dehydrate and hydrate — a database found by a name nobody wrote down", () => {
+  test("a backup with no decision about secrecy is refused, with what to do", async () => {
+    // The default is encryption; writing plaintext is a decision. A caller who
+    // made neither gets told, rather than quietly publishing a readable backup.
+    const db = await aDatabase("dehydrate-needs-a-decision");
+
+    await expect(
+      dehydrate({
+        orbitdb: alice.orbitdb,
+        address: db.address,
+        seed: SEED,
+        label: "needs-a-decision",
+        backend,
+        endpoints: routing.endpoints,
+      }),
+    ).rejects.toThrow(/encrypted by default.*dontEncrypt/is);
+  });
+
+  test("encrypted end to end: the store holds ciphertext, the second device reads the list", async () => {
+    const db = await aDatabase("dehydrate-encrypted");
+    await db.add("something only the key opens");
+
+    const cipher = await passkeyShapedCipher();
+
+    const put = await dehydrate({
+      orbitdb: alice.orbitdb,
+      address: db.address,
+      seed: SEED,
+      label: "encrypted",
+      backend,
+      ...cipher,
+      endpoints: routing.endpoints,
+    });
+
+    // What the service holds is not a CAR: it starts with this package's
+    // envelope, and a CAR reader would make nothing of it.
+    const stored = await backend.getBlob(put.carCID);
+    expect(isEncrypted(stored)).toBe(true);
+
+    // Without the key, the restore says what is wrong rather than failing
+    // somewhere inside the CAR reader.
+    await expect(
+      hydrate({
+        orbitdb: bob.orbitdb,
+        seed: SEED,
+        label: "encrypted",
+        endpoints: routing.endpoints,
+        ...fromBackend,
+      }),
+    ).rejects.toThrow(/encrypted.*decrypt/is);
+
+    // With it, the list comes back.
+    const got = await hydrate({
+      orbitdb: bob.orbitdb,
+      seed: SEED,
+      label: "encrypted",
+      decrypt: cipher.decrypt,
+      endpoints: routing.endpoints,
+      ...fromBackend,
+    });
+    const entries = await got.db.all();
+    expect(entries.map((entry) => entry.value)).toContain("something only the key opens");
+  });
+
   test(
     "the second device needs the seed, and nothing else at all",
     async () => {
@@ -117,6 +202,8 @@ describe("dehydrate and hydrate — a database found by a name nobody wrote down
         seed: SEED,
         label: "round-trip",
         backend,
+        // These tests are about the pointer, not about secrecy.
+        dontEncrypt: true,
         endpoints: routing.endpoints,
       });
       expect(put.metadataCID).toBeTruthy();
@@ -156,6 +243,8 @@ describe("dehydrate and hydrate — a database found by a name nobody wrote down
         seed: SEED,
         label: "shopping",
         backend,
+        // These tests are about the pointer, not about secrecy.
+        dontEncrypt: true,
         endpoints: routing.endpoints,
       });
       const second = await dehydrate({
@@ -164,6 +253,8 @@ describe("dehydrate and hydrate — a database found by a name nobody wrote down
         seed: SEED,
         label: "antenna",
         backend,
+        // These tests are about the pointer, not about secrecy.
+        dontEncrypt: true,
         endpoints: routing.endpoints,
       });
       expect(first.name).not.toBe(second.name);
@@ -195,6 +286,8 @@ describe("dehydrate and hydrate — a database found by a name nobody wrote down
         seed: SEED,
         label: "private",
         backend,
+        // These tests are about the pointer, not about secrecy.
+        dontEncrypt: true,
         endpoints: routing.endpoints,
       });
 
@@ -224,6 +317,8 @@ describe("dehydrate and hydrate — a database found by a name nobody wrote down
         seed: SEED,
         label: "again",
         backend,
+        // These tests are about the pointer, not about secrecy.
+        dontEncrypt: true,
         endpoints: routing.endpoints,
         sequence: 1n,
       });
@@ -235,6 +330,8 @@ describe("dehydrate and hydrate — a database found by a name nobody wrote down
         seed: SEED,
         label: "again",
         backend,
+        // These tests are about the pointer, not about secrecy.
+        dontEncrypt: true,
         endpoints: routing.endpoints,
         sequence: 2n,
       });
