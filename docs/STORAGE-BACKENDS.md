@@ -363,6 +363,51 @@ What it promises, and what it refuses to:
 | `pinByCid`                                           | true when **any** member can pin, and only those are asked                                                                                                                     |
 | `list()`, `remove()`                                 | not offered. A listing would be a union with duplicates, and a half-succeeded deletion leaves a copy behind while reporting success. Ask the service you mean                  |
 
+## 8c. Encrypting what leaves the browser
+
+A backup is two opaque blobs — a CAR and a small metadata JSON — and the service holding them
+neither needs nor should have their contents. Since #121 that is the default: `dehydrate` refuses
+to upload unless it is given a way to encrypt, or told plainly not to.
+
+```js
+await dehydrate({
+  orbitdb, address, seed, backend,
+  encrypt,   // (plaintext) => { ciphertext, iv }
+  decrypt,   // (ciphertext, iv) => plaintext
+});
+
+// A backup meant to be readable by anyone holding the CID says so:
+await dehydrate({ orbitdb, address, seed, backend, dontEncrypt: true });
+```
+
+**This package holds no keys**, and knows nothing about passkeys: it takes two functions, exactly
+as `createBackendFromChoice` takes `normaliseAddress` rather than importing viem. A browser builds
+them from the security key's PRF output — `@le-space/orbitdb-identity-provider-webauthn-did` ships
+`getPrfOutput`, `encryptWithAESGCM` and `decryptWithAESGCM` — and should derive a **separate** key
+for this, from the same secret with a different info string, so a compromised backup key is not a
+signing key.
+
+Restoring takes `decrypt` and nothing else:
+
+```js
+await hydrate({ orbitdb, seed, decrypt });
+```
+
+Two halves rather than one, because a restore does not read through a backend — it fetches from a
+gateway or from peers, so `withEncryption`'s `getBlob` never runs during one. `dehydrate` wraps
+the backend, `hydrate` wraps the fetcher, and a caller wiring the pieces by hand uses
+`withEncryption` and `decryptingFetch` from `./backends/encryption`.
+
+| | |
+| --- | --- |
+| the envelope | `"OSBE"`, a version, the IV length, the IV, then the ciphertext. A CAR starts with a varint and JSON with `{`, so neither is mistaken for one |
+| a plaintext backup | still restores: the envelope is recognised, and its absence means the bytes are passed through |
+| no key at hand | `explainIfEncrypted` says so, instead of failing inside the CAR reader |
+| a wrong key | refused with the reason, naming the CID |
+| `carImport`, `preservesInnerCids` | **false** through an encrypting backend: the stored bytes are an envelope, not a CAR |
+| dedup | gone. A fresh IV each time means two backups of an unchanged database share nothing |
+| verification | unchanged. Blocks are checked against their CIDs **after** decryption, which is what keeps a stranger's bytes safe |
+
 ## 9. Recommendation
 
 1. **Extract the backend interface before picking a backend.** `putBlob` / `getBlob` / `list` /

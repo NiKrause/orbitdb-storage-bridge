@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Changed — **breaking**
+- **Backups are encrypted by default** (#121). `dehydrate` refuses to upload unless it is given
+  `encrypt`/`decrypt`, or told `dontEncrypt: true`:
+
+  > Backups are encrypted by default. Pass `encrypt` and `decrypt` — a browser derives them from
+  > the security key — or `dontEncrypt: true` if this backup is meant to be readable by anyone
+  > holding the CID.
+
+  Every existing caller passes neither, so every existing caller stops at the next upload —
+  deliberately, with that message, rather than quietly continuing to publish a readable backup.
+  Plaintext is still available and is now a decision that shows up in a review. `dontEncrypt`
+  rather than `encrypt: false` because the double negative is awkward to read, which is what you
+  want from a line that turns off protection.
+
+### Added
+- **`@le-space/orbitdb-storage-bridge/backends/encryption`** — `withEncryption(backend, { encrypt,
+  decrypt })` encrypts on the way out, `decryptingFetch(fetchBytes, { decrypt })` decrypts on the
+  way back. Both halves are needed: a restore does not read through a backend, it fetches from a
+  gateway or from peers, so `getBlob` never runs during one.
+
+  This package holds no keys and knows nothing about passkeys — it takes two functions, as
+  `createBackendFromChoice` takes `normaliseAddress` rather than importing viem. A browser derives
+  them from the security key's PRF output, and should use a key derived separately from the
+  signing key.
+
+  The ciphertext carries an envelope — magic, version, IV — so a restore tells an encrypted backup
+  from a plaintext one written before this change without being told which it is.
+  `explainIfEncrypted` covers the third case with a sentence instead of a failure inside the CAR
+  reader: an encrypted backup and no key.
+
 ### Fixed
 - **`createPeerFetch` needs `identify`, and the documentation did not say so.** A node built with
   `withLibp2pLight` dials the provider successfully and then fetches nothing: without `identify`,
