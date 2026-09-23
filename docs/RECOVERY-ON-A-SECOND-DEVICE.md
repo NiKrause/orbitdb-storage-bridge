@@ -198,10 +198,10 @@ where the phone is, the restore has nowhere else to ask. Pass
 
 **Or skip the gateway.** `restoreFromCID` takes `fetchBytes`, and
 `peer-fetch.js` builds one that goes over libp2p instead — bitswap from the
-peers that hold the blocks. Measured from a real page on 2026-09-23: 0.73 s to
-dial Pinata's bitswap endpoint over `wss`, 0.26 s for the block, and **no
-credential anywhere in it**, while that same provider's HTTP gateway wants the
-account's key.
+peers that hold the blocks. Measured from a real page on 2026-09-23: Pinata 0.73 s to
+dial over `wss` and 0.26 s for the block, Lighthouse 0.58 s over
+`webrtc-direct` and 0.32 s — and **no credential anywhere in it**, while both
+providers' HTTP gateways want that account's key.
 
 ```js
 import { createPeerFetch, createGatewayFirstFetch, PINATA_BITSWAP } from

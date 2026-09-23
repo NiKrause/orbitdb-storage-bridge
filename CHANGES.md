@@ -32,10 +32,10 @@
   change; `createGatewayFirstFetch` tries HTTP with a short timeout and hands over to peers when
   it does not answer, telling the caller which path delivered and how long it took.
 
-  Measured from a real page (Chrome, no build step) on 2026-09-23: 0.73 s to dial Pinata's
-  bitswap endpoint over `wss`, 0.26 s for the block, **no credential anywhere in it** — while the
-  same provider's gateway wants that account's key. From Node with browser transports, Lighthouse
-  answered over `webrtc-direct` in 0.47 s + 0.39 s.
+  Measured from a real page (Chrome, no build step) on 2026-09-23, both services and both
+  transports: Pinata 0.73 s to dial over `wss` and 0.26 s for the block, Lighthouse 0.58 s over
+  `webrtc-direct` and 0.32 s. **No credential anywhere in it**, while both providers' HTTP
+  gateways want that account's key and Lighthouse's shared one answers 402.
 
   There is no default provider list. Whoever stores with a service already shares their CIDs with
   it, so reading from it adds no new party — but a page dialling a service it never uploaded to
