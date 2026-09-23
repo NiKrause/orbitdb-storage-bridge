@@ -1,8 +1,9 @@
 # Changes
 
-## Unreleased
+## 0.12.0 (2026-09-23)
 
 ### Added
+
 - **The storage probe is an example in this repository** (#110). It is a static page — one HTML
   file and one small module, no build step — that measures whether this package's backends work
   from a browser with no server: Aleph, Pinata and Lighthouse endpoints, their CORS on success
@@ -51,25 +52,6 @@
   a constant because Pinata publishes it in DNS; `providersFor(cid)` asks a router for the rest,
   and only `cid.contact` answers a browser.
 
-### Fixed
-- **The retrieval gateways were all retired on the same day** (#111). `ipfs.io` and `dweb.link`
-  stopped serving content on 2026-09-21, answering `429` with an RFC 8594 `Sunset` header;
-  `w3s.link` and `storacha.link` redirect to the first of those. Between them they were every
-  fallback this package had — in `gateway-fetch.js`, `backends/aleph.js`, `backends/storacha.js`,
-  `backup-car.js`, `ucan-bridge.js` and the bridge's own default — so each chain had one live
-  entry and a dead tail that only showed up when the live one had a bad minute.
-
-  Defaults are now `ipfs.aleph.cloud`, measured on 2026-09-23 as the one free path gateway still
-  serving arbitrary CIDs, and `TRUSTLESS_GATEWAYS` names `trustless-gateway.link` for verifiable
-  single-block requests (`accept: RAW_BLOCK`).
-
-- **A retired gateway no longer costs an afternoon.** `Retry-After: 900` was honoured literally,
-  three times per gateway, so a restore against the old list could wait out hours of retirement
-  notices before failing. A `Sunset` header now retires a gateway for that call, and any wait
-  beyond `MAX_BACKOFF_MS` (30 s) is treated as closed rather than busy. A gateway that announces
-  a sunset and still serves bytes is still used.
-
-### Added
 - `test/gateway-fetch.test.js` — the module had no tests, which is how four dead gateways sat in
   its default list. 13 of them, all offline: `fetch` and the wait are injected.
 
@@ -90,6 +72,61 @@
   string is **refused** with a message showing the shape rather than handed to all of them.
   Aleph's driver tries a list, so one gateway becomes a list of one with `/ipfs` appended; an
   explicit `gateways` still wins.
+
+### Changed
+
+- **`@helia/block-brokers` is no longer a dependency** (#119). It was declared here and imported
+  nowhere, and it was not free: it depends on `@helia/bitswap` ^3.2.3, so every tree that
+  installed this package got a second bitswap beside the 4.x that Helia brings itself.
+
+- **helia ^7.1.15**, which brings `@helia/bitswap` 4.0.19. The release that matters is 4.0.17:
+  bitswap did not work over **circuit-relay connections** at all — the topology was registered
+  without `notifyOnLimitedConnection`, so bitswap never learned the peer existed, and the dial
+  that requests blocks dropped `runOnLimitedConnections` (ipfs/helia#1124). `createPeerFetch`
+  dials providers, and a browser behind carrier NAT reaches some of them through a relay.
+
+- **Retrieval defaults have one entry where they had three** — see *Fixed*. Nothing was removed
+  from the API; the other two hosts were retired by the people who ran them.
+
+### Fixed
+
+- **The retrieval gateways were all retired on the same day** (#111). `ipfs.io` and `dweb.link`
+  stopped serving content on 2026-09-21, answering `429` with an RFC 8594 `Sunset` header;
+  `w3s.link` and `storacha.link` redirect to the first of those. Between them they were every
+  fallback this package had — in `gateway-fetch.js`, `backends/aleph.js`, `backends/storacha.js`,
+  `backup-car.js`, `ucan-bridge.js` and the bridge's own default — so each chain had one live
+  entry and a dead tail that only showed up when the live one had a bad minute.
+
+  Defaults are now `ipfs.aleph.cloud`, measured on 2026-09-23 as the one free path gateway still
+  serving arbitrary CIDs, and `TRUSTLESS_GATEWAYS` names `trustless-gateway.link` for verifiable
+  single-block requests (`accept: RAW_BLOCK`).
+
+- **A retired gateway no longer costs an afternoon.** `Retry-After: 900` was honoured literally,
+  three times per gateway, so a restore against the old list could wait out hours of retirement
+  notices before failing. A `Sunset` header now retires a gateway for that call, and any wait
+  beyond `MAX_BACKOFF_MS` (30 s) is treated as closed rather than busy. A gateway that announces
+  a sunset and still serves bytes is still used.
+
+## 0.11.0 (2026-09-23)
+
+Released from the workflow without a changelog entry at the time; written here from #109 so the
+history does not skip a version.
+
+### Added
+- **`createMirrorBackend([...])`: one backup on several services.** `putBlob` writes to all of
+  them and resolves when at least one accepted, with every service's outcome carried in the
+  handle — a silent partial success is the one answer that is not acceptable. `getBlob` asks them
+  in order and stops at the first that answers. Capabilities are the honest intersection:
+  `browserSafeAuth`, `carImport` and `preservesInnerCids` only when *every* member has them,
+  `minBlobSize` the largest, `pinByCid` when any member can pin. `list()` and `remove()` are not
+  offered — a union listing has duplicates, and a half-succeeded deletion leaves a copy behind
+  while reporting success.
+
+- **`createBackendFromChoice({ kind, … })`: a backend from a name and a key**, which is what a
+  page has once a reader ticks a service and pastes a credential. Every vendor module is imported
+  lazily, so a page that chose Aleph ships neither of the other two drivers, and a missing
+  credential is refused there and then, with the service named, rather than at the first upload.
+  Several kinds become a mirror. `resolveBackend` accepts the same choice.
 
 ## 0.10.0 (2026-09-19)
 
