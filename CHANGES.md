@@ -24,6 +24,12 @@
 - `test/gateway-fetch.test.js` — the module had no tests, which is how four dead gateways sat in
   its default list. 13 of them, all offline: `fetch` and the wait are injected.
 
+- `test/gateway-live.test.js` and a `gateways` job in `live-backends.yml` — the part a unit test
+  cannot know. It uploads one blob through Aleph, keyless, asks every default gateway for it by
+  CID, and fails on an RFC 8594 `Sunset` header, which a gateway publishes weeks before it goes
+  quiet. Checked against the failure it exists for: putting `dweb.link` back in the list turns it
+  red on both counts.
+
 ## 0.10.0 (2026-09-19)
 
 ### Added

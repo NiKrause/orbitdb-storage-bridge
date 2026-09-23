@@ -27,6 +27,10 @@ on:
         description: "Lighthouse: upload, list, delete, database restore"
         type: boolean
         default: true
+      gateways:
+        description: "Gateways: is every gateway we default to still serving?"
+        type: boolean
+        default: true
   pull_request:
     types: [labeled]
 
@@ -140,3 +144,32 @@ jobs:
       # Everything uploaded is deleted again in tearDown.
       - name: Lighthouse in the conformance and restore suites
         run: npx jest test/backends/conformance.test.js test/backends/restore.test.js --forceExit
+
+  # Cheap, keyless, and the one that goes stale on its own: a gateway is
+  # somebody else's infrastructure and can be retired without telling us.
+  # Issue #111 was exactly that, unnoticed until a restore needed the tail of
+  # the list. Worth running on a schedule if this keeps happening.
+  gateways:
+    name: Gateways (live)
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.gateways) ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'live-backends')
+    runs-on: ubuntu-latest
+    env:
+      GATEWAYS_LIVE: "true"
+      NODE_OPTIONS: "--experimental-vm-modules --no-warnings"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      # Uploads one small blob through Aleph, keyless, then asks every default
+      # gateway for it by CID — and fails on an RFC 8594 Sunset header, which
+      # a gateway publishes weeks before it goes quiet.
+      - name: Every default gateway still serves
+        run: npx jest test/gateway-live.test.js --forceExit
