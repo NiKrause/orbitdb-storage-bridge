@@ -623,6 +623,96 @@ describe("Courier Sync — OrbitDB replication over a byte courier, no libp2p", 
     expect(refused.missing.length).toBeGreaterThan(0);
   });
 
+  /**
+   * A delta has to be a delta.
+   *
+   * An entry's `refs` name previous entries directly, and a walk that stops
+   * only at the hashes the peer announced follows them around the stop and
+   * reaches the root. A peer missing one entry was sent the whole log: 12
+   * blocks and 8742 B where 2 blocks and 1533 B were owed — measured on two
+   * phones over LoRa, where the carrier moves about half a kilobyte a minute
+   * (funkpost#127). Ten minutes of airtime to deliver one todo.
+   *
+   * The round-trip test above could not catch it: `refs` first appear at three
+   * entries, and at three entries the newest has exactly one — which is the
+   * stop hash itself. The bug needs a log long enough to have a history to walk
+   * into.
+   */
+  test("a peer one entry behind is sent that entry, not the log", async () => {
+    const db = track(
+      await alice.orbitdb.open("courier-delta-refs", { type: "keyvalue" }),
+    );
+    for (let i = 0; i < 12; i++) await db.put(`k${i}`, { text: `todo ${i}` });
+
+    const newest = (await db.log.heads())[0];
+    const entry = dagCbor.decode(await db.log.storage.get(newest.hash));
+    const parent = entry.next[0];
+
+    // The skip-list this is about: without it there is nothing to walk around.
+    expect(entry.refs.length).toBeGreaterThan(1);
+
+    const delta = await createDelta({ db, theirHeads: [parent] });
+    const hashes = delta.blocks.map((block) => block.hash);
+
+    expect(hashes).toContain(newest.hash);
+    expect(hashes).not.toContain(parent);
+    for (const ref of entry.refs) expect(hashes).not.toContain(ref);
+
+    // The entry, and the identity block it references. Never the history.
+    expect(delta.blocks.length).toBeLessThanOrEqual(2);
+  });
+
+  test("a peer standing where we do is sent nothing", async () => {
+    const db = track(
+      await alice.orbitdb.open("courier-delta-quiet", { type: "keyvalue" }),
+    );
+    for (let i = 0; i < 5; i++) await db.put(`k${i}`, { n: i });
+    const ours = (await db.log.heads()).map((entry) => entry.hash);
+
+    const delta = await createDelta({ db, theirHeads: ours });
+    expect(delta.blocks).toEqual([]);
+    expect(delta.heads).toEqual(ours);
+  });
+
+  /**
+   * The other half, unfixed and pinned here so it changes visibly.
+   *
+   * When the peer has written something of its own, the head it announces is an
+   * entry we have never seen. Nothing of its ancestry can be walked, so the
+   * stop set is that hash alone and the delta is everything we hold. Applying
+   * is idempotent, so this costs bytes rather than correctness — but on a
+   * duty-cycled carrier bytes are minutes, and this is the case two people
+   * editing one list reach on their first concurrent change.
+   *
+   * The frontier exchange `createDelta`'s docstring leaves for later is what
+   * closes it: a peer that names a few ancestors alongside its heads gives the
+   * other side something it can stop at.
+   */
+  test("a peer whose head we do not hold still costs the whole log", async () => {
+    const db = track(
+      await alice.orbitdb.open("courier-delta-diverged", { type: "keyvalue" }),
+    );
+    for (let i = 0; i < 12; i++) await db.put(`k${i}`, { n: i });
+
+    const everything = await createDelta({ db, theirHeads: [] });
+    const stranger = await createDelta({
+      db,
+      theirHeads: ["zdpuAnEntryThisDatabaseHasNeverSeen"],
+    });
+
+    const entriesIn = (delta) =>
+      delta.blocks.filter((block) => {
+        try {
+          const value = dagCbor.decode(block.bytes);
+          return Boolean(value && value.sig && value.payload !== undefined);
+        } catch {
+          return false;
+        }
+      }).length;
+
+    expect(entriesIn(stranger)).toBe(entriesIn(everything));
+  });
+
   /** Resolve on the next turn of the event loop, after pending I/O callbacks. */
 
   test("a joiner's database is handed out only once the bootstrap is in it", async () => {
