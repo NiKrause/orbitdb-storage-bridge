@@ -1,6 +1,6 @@
 {
   "name": "@le-space/orbitdb-storage-bridge",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Back up, restore and replicate OrbitDB databases through pluggable storage backends, with hash and identity preservation",
   "main": "lib/orbitdb-storacha-bridge.js",
   "svelte": "dist/components/",
@@ -25,7 +25,7 @@
     "./backends/pinata": "./lib/backends/pinata.js",
     "./backends/lighthouse": "./lib/backends/lighthouse.js",
     "./backends/mirror": "./lib/backends/mirror.js",
-  "./backends/encryption": "./lib/backends/encryption.js",
+    "./backends/encryption": "./lib/backends/encryption.js",
     "./backends/choose": "./lib/backends/choose.js",
     "./backends/resolve": "./lib/backends/resolve.js",
     "./memory-courier": "./lib/memory-courier.js",
