@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased
+## 0.13.0 (2026-09-24)
 
 ### Changed — **breaking**
 - **Backups are encrypted by default** (#121). `dehydrate` refuses to upload unless it is given
