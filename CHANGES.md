@@ -1,5 +1,31 @@
 # Changes
 
+## 0.14.1 (2026-09-25)
+
+### Fixed
+- **The delta walk asked block storage about entries the log does not have, and paid a network
+  timeout for each one** (funkpost#170). 0.14.0's `reachableFrom` walks the peer's announced heads
+  to work out what they can already reach. It read those hashes straight out of
+  `db.log.storage` — and `IPFSBlockStorage.get` on a miss waits out a network timeout rather than
+  answering "no".
+
+  The peer's heads are exactly where the misses live: their newest entry is by definition the one
+  we have not got. So this was the ordinary path, not an edge case. Measured against a Helia node
+  with no peers — every phone in the field — **20 seconds for a single hash.** The delta it
+  eventually produced was correct; it simply arrived after everything around it had given up, and
+  two peers stopped converging.
+
+  It now asks `log.has` first, which reads the index and answers at once, and goes to block
+  storage only for what the index confirms. The same rule was already written down in
+  `applyDeltaToStores`'s closure check; this walk broke it.
+
+  Not caught here because the suite's own nodes are built `useBootstrap: false, useDHT: false,
+  autoDial: false`, where a miss fails instantly. The regression test pins the rule instead of the
+  timing: block storage is never asked about a head the log does not hold.
+
+**0.14.0 should not be used.** Any consumer whose Helia node can reach a network — which is the
+default — will see replication stall.
+
 ## 0.14.0 (2026-09-25)
 
 Both entries come from one field day: two phones, two Meshtastic nodes, no IP path, a todo list
