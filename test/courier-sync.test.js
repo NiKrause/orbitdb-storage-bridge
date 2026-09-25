@@ -631,7 +631,7 @@ describe("Courier Sync — OrbitDB replication over a byte courier, no libp2p", 
    * reaches the root. A peer missing one entry was sent the whole log: 12
    * blocks and 8742 B where 2 blocks and 1533 B were owed — measured on two
    * phones over LoRa, where the carrier moves about half a kilobyte a minute
-   * (funkpost#127). Ten minutes of airtime to deliver one todo.
+   * (#127). Ten minutes of airtime to deliver one todo.
    *
    * The round-trip test above could not catch it: `refs` first appear at three
    * entries, and at three entries the newest has exactly one — which is the
@@ -711,6 +711,102 @@ describe("Courier Sync — OrbitDB replication over a byte courier, no libp2p", 
       }).length;
 
     expect(entriesIn(stranger)).toBe(entriesIn(everything));
+  });
+
+  /**
+   * The two ways a delivery changes nothing, and why telling them apart is the
+   * whole point.
+   *
+   * A day of field logs from two phones over LoRa showed five complete `blocks`
+   * deliveries and not one join, with no line to say which of these it was —
+   * "synced" only fires when something moved, so a courier doing no harm and a
+   * courier doing no good both produced perfect silence (#127).
+   */
+  test("a delivery that joins nothing says whether it was already held or never sent", async () => {
+    const db = track(
+      await alice.orbitdb.open("courier-applied-outcome", { type: "keyvalue" }),
+    );
+    await db.put("a", { n: 1 });
+    await db.put("b", { n: 2 });
+
+    const full = await createDelta({ db, theirHeads: [] });
+
+    // Bob is offline from Alice, so the manifest has to be handed over before
+    // the address can open at all — as first contact does over the courier.
+    const { CID } = await import("multiformats/cid");
+    const { base58btc } = await import("multiformats/bases/base58");
+    const isEntry = (bytes) => {
+      const value = dagCbor.decode(bytes);
+      return Boolean(value && value.sig && value.payload !== undefined);
+    };
+    for (const block of full.blocks) {
+      if (isEntry(block.bytes)) continue;
+      await bob.orbitdb.ipfs.blockstore.put(
+        CID.parse(block.hash, base58btc),
+        block.bytes,
+      );
+    }
+    const target = track(await bob.orbitdb.open(db.address, { sync: false }));
+
+    const first = await applyDelta({ db: target, delta: full });
+    expect(first.heads).toBe(1);
+    expect(first.outcome).toMatchObject({ joined: 1, held: 0, absent: 0 });
+
+    // The same delivery again: wasteful, and correct. `held`.
+    const again = await applyDelta({ db: target, delta: full });
+    expect(again.complete).toBe(true);
+    expect(again.joined).toBe(0);
+    expect(again.outcome).toMatchObject({ joined: 0, held: 1, absent: 0 });
+
+    // A head named without the block that carries it: not wasteful, wrong.
+    // Identical from outside until now, and it has to read differently.
+    await db.put("c", { n: 3 });
+    const suffix = await createDelta({ db, theirHeads: full.heads });
+    const hollow = await applyDelta({
+      db: target,
+      delta: { heads: suffix.heads, blocks: [] },
+    });
+    expect(hollow.complete).toBe(true);
+    expect(hollow.joined).toBe(0);
+    expect(hollow.outcome).toMatchObject({ joined: 0, held: 0, absent: 1 });
+  });
+
+  test("every delivery is reported, including the ones that join nothing", async () => {
+    const db = track(
+      await alice.orbitdb.open("courier-applied-event", { type: "keyvalue" }),
+    );
+    await db.put("only", { text: "once" });
+
+    // Duplicated delivery is the cheap way to a redundant delta: the second
+    // copy carries what the log already holds, which is the shape a field run
+    // has to be able to recognise without a desk to check it against.
+    const pair = createMemoryCourierPair({ duplicateFn: () => true });
+    const syncA = await createCourierSync({ db, courier: pair.a });
+    const syncB = await createCourierSync({
+      orbitdb: bob.orbitdb,
+      address: db.address,
+      courier: pair.b,
+    });
+    const applied = [];
+    const synced = [];
+    syncB.on("applied", (report) => applied.push(report));
+    syncB.on("synced", (report) => synced.push(report));
+
+    await syncA.start();
+    await syncB.start();
+    await converge(pair, [syncA, syncB]);
+
+    expect(await keysOf(track(syncB.db))).toEqual(["only"]);
+    expect(synced.length).toBeGreaterThanOrEqual(1);
+
+    // More arrived than moved the database, and every arrival is accounted for.
+    expect(applied.length).toBeGreaterThan(synced.length);
+    expect(applied.some((r) => r.joined === 1)).toBe(true);
+    expect(applied.some((r) => r.joined === 0 && r.held > 0)).toBe(true);
+    for (const report of applied) expect(report.absent).toBe(0);
+
+    await syncA.stop();
+    await syncB.stop();
   });
 
   /** Resolve on the next turn of the event loop, after pending I/O callbacks. */
