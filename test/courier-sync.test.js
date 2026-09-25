@@ -662,6 +662,55 @@ describe("Courier Sync — OrbitDB replication over a byte courier, no libp2p", 
     expect(delta.blocks.length).toBeLessThanOrEqual(2);
   });
 
+  /**
+   * The delta may not go to block storage for something the log does not have.
+   *
+   * `IPFSBlockStorage.get` on a miss waits out a network timeout. Against a
+   * Helia node with no peers — every phone in the field — that was measured at
+   * 20 s for a single hash, which stalled the whole exchange past the timeouts
+   * around it while the delta it eventually produced was perfectly correct
+   * (0.14.0, funkpost#170).
+   *
+   * The peer's announced heads are exactly where misses live: their newest
+   * entry is by definition the one we have not got. So this is not an edge
+   * case, it is the ordinary path.
+   *
+   * Convergence cannot pin it here. The nodes in this suite are built with
+   * `useBootstrap: false, useDHT: false, autoDial: false`, where a miss fails
+   * at once — which is why the bug shipped. What pins it is the rule itself:
+   * ask the index, and only then the blocks.
+   */
+  test("the delta asks the index, never block storage, about a head we do not hold", async () => {
+    const db = track(
+      await alice.orbitdb.open("courier-delta-no-network", {
+        type: "keyvalue",
+      }),
+    );
+    for (let i = 0; i < 4; i++) await db.put(`k${i}`, { n: i });
+
+    const stranger = "zdpuAnEntryThisDatabaseHasNeverSeen";
+    const asked = [];
+    const storage = db.log.storage;
+    const realGet = storage.get.bind(storage);
+    storage.get = async (hash) => {
+      asked.push(hash);
+      return realGet(hash);
+    };
+
+    let delta;
+    try {
+      delta = await createDelta({ db, theirHeads: [stranger] });
+    } finally {
+      storage.get = realGet;
+    }
+
+    expect(asked).not.toContain(stranger);
+    // And it still does its job: nothing of that peer's ancestry is walkable,
+    // so everything we hold is owed. Correct, and now also prompt.
+    expect(delta.blocks.length).toBeGreaterThan(0);
+    expect(delta.heads).toEqual((await db.log.heads()).map((e) => e.hash));
+  });
+
   test("a peer standing where we do is sent nothing", async () => {
     const db = track(
       await alice.orbitdb.open("courier-delta-quiet", { type: "keyvalue" }),
