@@ -1,5 +1,53 @@
 # Changes
 
+## 0.14.0 (2026-09-25)
+
+Both entries come from one field day: two phones, two Meshtastic nodes, no IP path, a todo list
+over LoRa. The carrier moves about half a kilobyte a minute, which turns every protocol question
+into minutes and made both of these visible at once.
+
+### Fixed
+- **A delta carried the whole log, every time** (#127, in #129). `createDelta` walked back from
+  our heads and stopped only at the hashes the peer had announced — but an OrbitDB entry's `refs`
+  are skip-list back-references that point *past* its parent, so the walk followed one around the
+  stop and carried on to the root. A peer missing a single entry was sent everything: **12 blocks
+  and 8742 B where 2 blocks and 1533 B were owed.** Ten minutes of airtime to deliver one todo.
+
+  The stop set is now everything reachable from the heads the peer named, walked through `next`
+  *and* `refs`, so a ref can no longer route around it. A peer standing exactly where we do is
+  answered without reading the ancestry at all.
+
+  The other half of #127 stays open, and is now pinned by a test rather than described: when the
+  peer's head is an entry we have never seen, none of its ancestry can be walked, the stop set is
+  that hash alone, and the delta is again everything we hold. That is the case two people editing
+  one list reach on their first concurrent change. Closing it wants the frontier exchange — a peer
+  naming a few ancestors alongside its heads, so the other side has something to stop at.
+
+### Added
+- **`applied` — what a delivery came to, including when it came to nothing** (#130). `synced`
+  fires only when something joined, so a delivery that joined nothing produced no event at all,
+  and four different outcomes shared that silence. Two of them are opposite findings:
+
+  > `held` — the entry was already in the log. Another route brought it first, so the courier
+  > delivered something nobody needed: wasteful, and correct.
+  >
+  > `absent` — the sender named a head and did not send it. A defect in the delta it built, and
+  > the database does not move.
+
+  Five complete `blocks` deliveries reached a phone that day and not one of them joined anything,
+  on either device. Nothing in the logs could say which of these it was, and they call for
+  opposite repairs — so the run has to be done again to ask a question the phones were already
+  holding the answer to.
+
+  `createCourierSync` now emits `applied` for every `blocks` delivery, complete or not, carrying
+  `{ complete, heads, missing, joined, held, absent, malformed, refused }`. `applyDelta` returns
+  `heads` and `outcome` alongside what it returned before. `malformed` and `refused` should not
+  happen at all; they are counted rather than folded into `absent` so that "should not happen"
+  stays falsifiable in a field log.
+
+  `synced` is unchanged — same payload, same condition — so a consumer that only wants joins keeps
+  the event it has.
+
 ## 0.13.0 (2026-09-24)
 
 ### Changed — **breaking**
