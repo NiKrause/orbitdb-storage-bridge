@@ -1112,6 +1112,75 @@ describe("Courier Sync — OrbitDB replication over a byte courier, no libp2p", 
   });
 
   /**
+   * One change, one message — and reconciliation only when it is asked for.
+   *
+   * Measured over funkpost's Meshtastic courier, framing and pacing included,
+   * once the bootstrap's own tail has settled: a further change costs `A:op:86`
+   * and nothing else. The delta plane, still there for repair, does not tag
+   * along.
+   *
+   * The second half is the contract that makes the first half safe. Divergent
+   * logs are this plane's ordinary state, so `announce()` marks a genuine
+   * request to reconcile and an ordinary announce does not. Both terminate
+   * either way — dropping the mark costs nine messages for one reconcile
+   * against six, not a loop — but the distinction is what lets the design say
+   * "announce() is the repair" and mean it.
+   */
+  test("one change is one message, and reconciling is asked for", async () => {
+    const db = track(
+      await alice.orbitdb.open("courier-ops-no-delta", {
+        type: "keyvalue",
+        AccessController: IPFSAccessController({ write: ["*"] }),
+      }),
+    );
+    await db.put("seed", { n: 0 });
+
+    const pair = createMemoryCourierPair();
+    const syncA = await createCourierSync({
+      db,
+      courier: pair.a,
+      liveUpdates: "operations",
+    });
+    const syncB = await createCourierSync({
+      orbitdb: bob.orbitdb,
+      address: db.address,
+      courier: pair.b,
+      liveUpdates: "operations",
+    });
+    await syncA.start();
+    await syncB.start();
+    await converge(pair, [syncA, syncB]);
+    expect(await keysOf(track(syncB.db))).toEqual(["seed"]);
+
+    // Count only what the change itself costs, after the bootstrap is done.
+    const sent = [];
+    for (const [name, sync] of [
+      ["A", syncA],
+      ["B", syncB],
+    ]) {
+      sync.on("message", (m) => {
+        if (m.direction === "out") sent.push(`${name}:${m.type}`);
+      });
+    }
+    await db.put("cheap", { text: "one message, and no delta" });
+    await converge(pair, [syncA, syncB]);
+
+    expect(await syncB.db.get("cheap")).toBeTruthy();
+    expect(sent).toEqual(["A:op"]);
+
+    // The other half of the contract: asking still reconciles. Both logs now
+    // hold an entry the other lacks, and this is how that is closed.
+    sent.length = 0;
+    await syncA.announce();
+    await converge(pair, [syncA, syncB]);
+    expect(sent).toContain("A:announce");
+    expect(sent.some((m) => m.endsWith(":blocks"))).toBe(true);
+
+    await syncA.stop();
+    await syncB.stop();
+  });
+
+  /**
    * The refusal every consumer of this plane meets first.
    *
    * A database whose access controller names one writer replicates perfectly on
