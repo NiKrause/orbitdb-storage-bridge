@@ -1,5 +1,8 @@
 # Why Storacha stopped being the default
 
+From the era itself, and left here rather than dropped: [Bridging OrbitDB with Storacha: Decentralized Database Backups](https://medium.com/@akashjana663/bridging-orbitdb-with-storacha-decentralized-database-backups-44c7bee5c395),
+which the roadmap used to link.
+
 Moved out of the README, because it is history rather than reference. The current backends are in
 [STORAGE-BACKENDS.md](STORAGE-BACKENDS.md).
 
