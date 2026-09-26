@@ -907,6 +907,259 @@ describe("Courier Sync — OrbitDB replication over a byte courier, no libp2p", 
     await syncB.stop();
   });
 
+  /**
+   * The operation plane: the change, not the entry that held it.
+   *
+   * A cold join still goes through the delta plane — an operation carries no
+   * manifest, so it cannot bootstrap anything. What changes is every write
+   * after that.
+   */
+  test("a change crosses as an operation, and the view agrees while the logs do not", async () => {
+    const db = track(
+      await alice.orbitdb.open("courier-ops-converge", {
+        type: "keyvalue",
+        AccessController: IPFSAccessController({ write: ["*"] }),
+      }),
+    );
+    await db.put("first", { text: "before the join", done: false });
+
+    const pair = createMemoryCourierPair();
+    const syncA = await createCourierSync({
+      db,
+      courier: pair.a,
+      liveUpdates: "operations",
+    });
+    const syncB = await createCourierSync({
+      orbitdb: bob.orbitdb,
+      address: db.address,
+      courier: pair.b,
+      liveUpdates: "operations",
+    });
+    const errors = [];
+    syncA.on("error", (e) => errors.push(e));
+    syncB.on("error", (e) => errors.push(e));
+
+    await syncA.start();
+    await syncB.start();
+    await converge(pair, [syncA, syncB]);
+
+    // Bootstrap came from the delta plane, as it must.
+    expect(await keysOf(track(syncB.db))).toEqual(["first"]);
+
+    // From here the operation plane carries the changes.
+    const applied = [];
+    syncB.on("applied", (report) => applied.push(report));
+    await db.put("second", { text: "over the operation plane", done: false });
+    await converge(pair, [syncA, syncB]);
+
+    expect(await keysOf(syncB.db)).toEqual(["first", "second"]);
+    expect(await syncB.db.get("second")).toEqual({
+      text: "over the operation plane",
+      done: false,
+    });
+    expect(applied.some((r) => r.via === "operation" && r.joined === 1)).toBe(
+      true,
+    );
+    expect(errors).toEqual([]);
+
+    // The honest half of the trade: same view, different log. Bob's entry for
+    // "second" is Bob's own write, with Bob's identity and Bob's hash.
+    const hashOf = async (d, key) =>
+      (await d.log.values()).find((e) => e.payload.key === key)?.hash;
+    expect(await hashOf(syncB.db, "second")).not.toEqual(
+      await hashOf(db, "second"),
+    );
+
+    await syncA.stop();
+    await syncB.stop();
+  });
+
+  /**
+   * The number the module docstring rests on, kept honest by a test.
+   *
+   * On a carrier moving about half a kilobyte a minute, the difference between
+   * these two figures is the difference between fourteen seconds and three
+   * minutes for one ticked box.
+   */
+  test("an operation costs a fraction of what the entry it came from costs", async () => {
+    const open = async (name, plane) => {
+      const db = track(
+        await alice.orbitdb.open(name, {
+          type: "keyvalue",
+          AccessController: IPFSAccessController({ write: ["*"] }),
+        }),
+      );
+      await db.put("seed", { text: "already known to both", done: false });
+      const pair = createMemoryCourierPair();
+      const a = await createCourierSync({
+        db,
+        courier: pair.a,
+        liveUpdates: plane,
+      });
+      const b = await createCourierSync({
+        orbitdb: bob.orbitdb,
+        address: db.address,
+        courier: pair.b,
+        liveUpdates: plane,
+      });
+      await a.start();
+      await b.start();
+      await converge(pair, [a, b]);
+      return { db, pair, a, b };
+    };
+
+    /** Bytes A puts on the carrier for exactly one further change. */
+    const costOfOneChange = async ({ db, pair, a, b }) => {
+      let bytes = 0;
+      a.on("message", (m) => {
+        if (m.direction === "out") bytes += m.bytes;
+      });
+      await db.put("t1", { text: "Milch kaufen", done: false, ts: 1 });
+      await converge(pair, [a, b]);
+      await a.stop();
+      await b.stop();
+      return bytes;
+    };
+
+    const asOperation = await costOfOneChange(
+      await open("courier-ops-cost-op", "operations"),
+    );
+    const asDelta = await costOfOneChange(
+      await open("courier-ops-cost-delta", "delta"),
+    );
+
+    expect(asOperation).toBeGreaterThan(0);
+    expect(asOperation * 4).toBeLessThan(asDelta);
+  });
+
+  test("a duplicated operation is performed once, not twice", async () => {
+    const db = track(
+      await alice.orbitdb.open("courier-ops-dupes", {
+        type: "keyvalue",
+        AccessController: IPFSAccessController({ write: ["*"] }),
+      }),
+    );
+    await db.put("seed", { n: 0 });
+
+    const pair = createMemoryCourierPair({ duplicateFn: () => true });
+    const syncA = await createCourierSync({
+      db,
+      courier: pair.a,
+      liveUpdates: "operations",
+    });
+    const syncB = await createCourierSync({
+      orbitdb: bob.orbitdb,
+      address: db.address,
+      courier: pair.b,
+      liveUpdates: "operations",
+    });
+    await syncA.start();
+    await syncB.start();
+    await converge(pair, [syncA, syncB]);
+
+    const before = (await track(syncB.db).log.values()).length;
+    await db.put("once", { text: "exactly one entry, please" });
+    await converge(pair, [syncA, syncB]);
+
+    expect(await syncB.db.get("once")).toEqual({
+      text: "exactly one entry, please",
+    });
+    expect((await syncB.db.log.values()).length).toBe(before + 1);
+
+    await syncA.stop();
+    await syncB.stop();
+  });
+
+  test("performing an operation does not send it back", async () => {
+    // Without the guard two phones trade one change for ever, and on a
+    // duty-cycled carrier that is the whole budget gone.
+    const db = track(
+      await alice.orbitdb.open("courier-ops-echo", {
+        type: "keyvalue",
+        AccessController: IPFSAccessController({ write: ["*"] }),
+      }),
+    );
+    await db.put("seed", { n: 0 });
+
+    const pair = createMemoryCourierPair();
+    const syncA = await createCourierSync({
+      db,
+      courier: pair.a,
+      liveUpdates: "operations",
+    });
+    const syncB = await createCourierSync({
+      orbitdb: bob.orbitdb,
+      address: db.address,
+      courier: pair.b,
+      liveUpdates: "operations",
+    });
+    await syncA.start();
+    await syncB.start();
+    await converge(pair, [syncA, syncB]);
+
+    const fromB = [];
+    syncB.on("message", (m) => {
+      if (m.direction === "out") fromB.push(m.type);
+    });
+    await db.put("one-way", { text: "there, and not back again" });
+    await converge(pair, [syncA, syncB]);
+
+    expect(await syncB.db.get("one-way")).toBeTruthy();
+    expect(fromB).not.toContain("op");
+
+    await syncA.stop();
+    await syncB.stop();
+  });
+
+  /**
+   * The refusal every consumer of this plane meets first.
+   *
+   * A database whose access controller names one writer replicates perfectly on
+   * the delta plane — the far side only *stores* an entry that writer signed.
+   * Here the far side performs the change as its own write, so it must itself be
+   * allowed to. OrbitDB's own message says the key is not allowed; it does not
+   * say that choosing this plane is what made that matter, and the next person
+   * to hit it should not have to work that out.
+   */
+  test("an operation into a log we may not write to says why, not just no", async () => {
+    // The default controller: only Alice may write.
+    const db = track(
+      await alice.orbitdb.open("courier-ops-forbidden", { type: "keyvalue" }),
+    );
+    await db.put("seed", { n: 0 });
+
+    const pair = createMemoryCourierPair();
+    const syncA = await createCourierSync({
+      db,
+      courier: pair.a,
+      liveUpdates: "operations",
+    });
+    const syncB = await createCourierSync({
+      orbitdb: bob.orbitdb,
+      address: db.address,
+      courier: pair.b,
+      liveUpdates: "operations",
+    });
+    const errors = [];
+    syncB.on("error", (e) => errors.push(e));
+    await syncA.start();
+    await syncB.start();
+    await converge(pair, [syncA, syncB]);
+
+    await db.put("refused", { text: "bob may not write this" });
+    await converge(pair, [syncA, syncB]);
+
+    expect(errors.length).toBeGreaterThan(0);
+    const said = errors.map((e) => e.message).join(" ");
+    expect(said).toMatch(/write set/);
+    expect(said).toMatch(/liveUpdates/);
+    // And the delta plane is unharmed: Bob still holds what Alice signed.
+    expect(await keysOf(syncB.db)).toEqual(["seed"]);
+
+    await syncA.stop();
+    await syncB.stop();
+  });
+
   test("presence: the question gets an answer even from a peer that never speaks", async () => {
     // The distinction the whole thing exists for. A carrier can report the
     // radios in range; it cannot report whether a program on the other end
