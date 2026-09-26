@@ -1,7 +1,7 @@
 # Storage backends after Storacha
 
 Storacha switched off writes on 2026-05-15 and the service is now gone (the evidence is in the
-[README status section](../README.md#status-storacha-sunset-may-2026)). This document evaluates what
+[STORACHA-SUNSET.md](STORACHA-SUNSET.md)). This document evaluates what
 can take the backend slot. Everything below was checked on **2026-09-05**; prices and API shapes move,
 so re-check before committing to one.
 
@@ -153,7 +153,7 @@ workflow, on an account whose trial had run out:
 
 So uploads, the CAR round trip and a database restore are **not yet verified against a live
 account** — that waits for a paid plan and is tracked in
-[issue 60](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/issues/60). What the offline tests pin
+[issue 60](https://github.com/NiKrause/orbitdb-storage-bridge/issues/60). What the offline tests pin
 down instead are the request and answer shapes of `@lighthouse-web3/sdk` 0.4.7. The driver reports
 an expired plan as `UNSUPPORTED`, not as a bad key.
 
@@ -431,7 +431,7 @@ the backend, `hydrate` wraps the fetcher, and a caller wiring the pieces by hand
    [`orbitdb-relay-pinner`](https://github.com/NiKrause/orbitdb-relay-pinner) are what made the 504s
    at the top of this page survivable at all. A paid backend is the third copy, not the copy.
 
-The phased plan built on this is [issue 54](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/issues/54), kept out of
+The phased plan built on this is [issue 54](https://github.com/NiKrause/orbitdb-storage-bridge/issues/54), kept out of
 this page so a stale plan cannot be mistaken for a fact.
 
 **Open questions to measure before committing**

@@ -440,6 +440,10 @@ speaks to now hand back a CID instead.
 
 ## 🔗 Related Documentation
 
-- [Main README](../README.md) - Project overview
-- [UCAN Auth](./UCAN_DELEGATION_IMPLEMENTATION.md) - UCAN authentication
-- [P256 Security](./P256-UCAN-SECURITY.md) - Security considerations
+- [Main README](../README.md) — project overview
+- [DESIGN.md](DESIGN.md) — how a backup and a restore work
+- [STORAGE-BACKENDS.md](STORAGE-BACKENDS.md) — where a CAR can be stored, and what each service costs
+
+The UCAN authentication and P-256 security documents this section used to link were deleted in
+`de42fd2`; what survives of them is [STORACHA-UI-HISTORY.md](STORACHA-UI-HISTORY.md) and the tests
+in `test/p256-ucan-security.test.js`.
