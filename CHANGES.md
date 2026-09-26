@@ -418,7 +418,7 @@ history does not skip a version.
   them could be imported.
 
 Releases 0.5.0 to 0.6.0 are described in their
-[GitHub release notes](https://github.com/NiKrause/@le-space/orbitdb-storage-bridge/releases).
+[GitHub release notes](https://github.com/NiKrause/orbitdb-storage-bridge/releases).
 
 ## 0.4.3 (2026-01-23)
 

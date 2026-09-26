@@ -269,7 +269,7 @@ Say these out loud before building on it:
 ## What was measured, and on what
 
 - **The whole procedure, on two phones** — 2026-09-21, one YubiKey, through
-  funkpost's [recovery page](https://nikrause.github.io/funkpost/recovery/). A
+  the [recovery page](https://nikrause.github.io/orbitdb-storage-bridge/recovery/). A
   Galaxy Fold 5 made a list and dehydrated it to Aleph, then was **reset**. A
   Galaxy A57 with the same key had the same DID and derived signing key,
   hydrated the list with the key alone, and **wrote an entry the access
@@ -281,7 +281,7 @@ Say these out loud before building on it:
   Fold 5 and a Galaxy A57, 2026-09-19: the same PRF value, the passkey found
   without being named, ES256 signatures leaving exactly one candidate public
   key, and the same DID and derived signing key on both phones. The probe is
-  [`passkey-probe`](https://nikrause.github.io/funkpost/passkey-probe/), and it
+  [`passkey-probe`](https://le-space.github.io/orbitdb-identity-provider-webauthn-did/passkey-probe/), and it
   deliberately implements none of this from the packages, so it can disprove
   them.
 - **A browser may publish a pointer** — `test/helpers/probe-ipns-routing.js`,

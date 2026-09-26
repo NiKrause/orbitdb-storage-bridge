@@ -46,6 +46,7 @@
     "clear-space": "node examples/storacha/clear-space.js",
     "car-demo": "node examples/storacha/car-backup-demo.js",
     "ucan-demo": "node examples/storacha/ucan-demo.js",
+    "check:links": "node scripts/check-links.mjs",
     "lint": "eslint --config eslint.config.js '{lib,examples,test}/**/*.js' --ignore-pattern 'examples/svelte/*/build/**' --ignore-pattern 'examples/svelte/*/dist/**' --ignore-pattern 'examples/svelte/**/.svelte-kit/**' --ignore-pattern 'node_modules/**'",
     "format": "prettier --write lib/ examples/ test/ --ignore-path '.prettierignore'",
     "clean": "rm -rf ./cid-bridge-test* ./demo-test*",

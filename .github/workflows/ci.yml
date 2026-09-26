@@ -31,6 +31,32 @@ jobs:
 
       - name: Run ESLint
         run: npm run lint
+
+  # Markdown was checked by nobody: `lint` and `format` cover
+  # {lib,examples,test}/**/*.js and nothing else. Two README links pointed at a
+  # demo that had moved repositories months earlier, and six URLs carried the npm
+  # scope in the GitHub path after the rename -- all of it invisible to CI.
+  #
+  # Relative paths and heading anchors are facts about this repository and are
+  # fatal. External URLs fail only on 404/410: a 403 from npmjs.com is somebody
+  # else's bot policy, and a pipeline that reddens on that is one everybody
+  # learns to ignore. Those are printed instead.
+  link-check:
+    name: Links
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # No npm ci on purpose: the checker has no dependencies, so this job stays
+      # a few seconds long and cannot be broken by the lockfile.
+      - name: Check links
+        run: npm run check:links
   # No credentials, no network: the protocol logic against an in-memory courier.
   # Runs beside lint rather than behind the Storacha chain, so a fork without
   # secrets still gets a signal — and so the suite downstream projects depend on
