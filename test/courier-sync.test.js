@@ -1044,10 +1044,18 @@ describe("Courier Sync — OrbitDB replication over a byte courier, no libp2p", 
       }),
     );
     const pair = createMemoryCourierPair();
+    // The window has to be wider than the time between Bob's last message and
+    // the assertion below, and that time is not ours to control: convergence
+    // does real OrbitDB work, and a loaded runner stretches it. At 1 ms — which
+    // is what this test used to pass — the peer had already expired before it
+    // could be counted, and the assertion failed with 0 where 1 was expected on
+    // a scheduled run of main. A second attempt went green, which is exactly
+    // what makes it worth fixing rather than re-running.
+    const window = 1000;
     const syncA = await createCourierSync({
       db,
       courier: pair.a,
-      peerTimeoutMs: 1,
+      peerTimeoutMs: window,
     });
     const syncB = await createCourierSync({
       orbitdb: bob.orbitdb,
@@ -1059,7 +1067,7 @@ describe("Courier Sync — OrbitDB replication over a byte courier, no libp2p", 
     await converge(pair, [syncA, syncB]);
     expect(syncA.presence().peers.length).toBe(1);
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => setTimeout(resolve, window + 100));
     const later = syncA.presence();
     expect(later.peers).toEqual([]);
     // Still true, and still useful: the air did carry something once.
