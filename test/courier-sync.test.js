@@ -1181,6 +1181,163 @@ describe("Courier Sync — OrbitDB replication over a byte courier, no libp2p", 
   });
 
   /**
+   * Batching, which is what the operation plane was missing.
+   *
+   * `announceOnLocalUpdate: false` is how an application says "typing must not
+   * spend airtime — a button decides". On the delta plane that means do not
+   * watch at all. On this plane it cannot: the write still has to be
+   * remembered, or the button has nothing to send. funkpost's mesh-todo sets
+   * exactly that flag, so setting `liveUpdates` there changed nothing at all
+   * until this — measured in a browser, the wire showed `blocks` and no `op`.
+   */
+  const openBatching = async (name, alice, bob) => {
+    const db = track(
+      await alice.orbitdb.open(name, {
+        type: "keyvalue",
+        AccessController: IPFSAccessController({ write: ["*"] }),
+      }),
+    );
+    await db.put("seed", { n: 0 });
+    const pair = createMemoryCourierPair();
+    const opts = { liveUpdates: "operations", announceOnLocalUpdate: false };
+    const a = await createCourierSync({ db, courier: pair.a, ...opts });
+    const b = await createCourierSync({
+      orbitdb: bob.orbitdb,
+      address: db.address,
+      courier: pair.b,
+      ...opts,
+    });
+    await a.start();
+    await b.start();
+    await converge(pair, [a, b]);
+    return { db, pair, a, b };
+  };
+
+  test("writes wait for the button, and then go as operations", async () => {
+    const { db, pair, a, b } = await openBatching(
+      "courier-ops-batch",
+      alice,
+      bob,
+    );
+    expect(await keysOf(track(b.db))).toEqual(["seed"]);
+
+    const out = [];
+    a.on("message", (m) => {
+      if (m.direction === "out") out.push(m.type);
+    });
+
+    for (const k of ["one", "two", "three"]) await db.put(k, { text: k });
+    await converge(pair, [a, b]);
+
+    // Nothing pressed, nothing sent — the whole point of the flag.
+    expect(out).toEqual([]);
+    expect(await keysOf(b.db)).toEqual(["seed"]);
+
+    await a.announce();
+    await converge(pair, [a, b]);
+
+    expect(out).toEqual(["op", "op", "op"]);
+    expect(await keysOf(b.db)).toEqual(["one", "seed", "three", "two"]);
+  });
+
+  test("with nothing waiting, the button still means reconcile", async () => {
+    const { pair, a, b } = await openBatching(
+      "courier-ops-batch-empty",
+      alice,
+      bob,
+    );
+    const out = [];
+    a.on("message", (m) => {
+      if (m.direction === "out") out.push(m.type);
+    });
+
+    await a.announce();
+    await converge(pair, [a, b]);
+
+    expect(out).toContain("announce");
+    expect(out).not.toContain("op");
+
+    await a.stop();
+    await b.stop();
+  });
+
+  /**
+   * The cap is not about memory.
+   *
+   * The outbox holds `maxOutbox` messages and sheds the oldest when it
+   * overflows, and an operation is the one message here that cannot be
+   * re-derived — `announce`, `want` and `blocks` are all asked for again. So a
+   * batch long enough to overflow the outbox would lose writes silently. One
+   * delta is one message and complete by construction, which is the right
+   * shape past that point.
+   */
+  test("a batch too long to send safely goes as a delta instead", async () => {
+    const { db, pair, a, b } = await openBatching(
+      "courier-ops-batch-long",
+      alice,
+      bob,
+    );
+    const out = [];
+    a.on("message", (m) => {
+      if (m.direction === "out") out.push(m.type);
+    });
+
+    for (let i = 0; i < 20; i++) await db.put(`k${i}`, { n: i });
+    await converge(pair, [a, b]);
+    expect(out).toEqual([]);
+
+    await a.announce();
+    await converge(pair, [a, b], 40);
+
+    expect(out).not.toContain("op");
+    expect(out).toContain("announce");
+    // And it arrived: complete by construction is the reason for the fallback.
+    expect((await keysOf(b.db)).length).toBe(21);
+
+    await a.stop();
+    await b.stop();
+  });
+
+  /**
+   * A reconcile is allowed to deliver; it is not allowed to *spend the queue*.
+   *
+   * The distinction matters because the queue is the application's: the button
+   * decides when writes cost airtime. An acknowledgement at the end of a blocks
+   * delivery must not make that decision on its behalf — so no `op` leaves on
+   * an internal announce, and the queue is still there afterwards.
+   */
+  test("an internal announce sends no operations, and leaves the queue intact", async () => {
+    const { db, pair, a, b } = await openBatching(
+      "courier-ops-batch-internal",
+      alice,
+      bob,
+    );
+    await db.put("waiting", { text: "the button decides when this costs air" });
+    await converge(pair, [a, b]);
+
+    const out = [];
+    a.on("message", (m) => {
+      if (m.direction === "out") out.push(m.type);
+    });
+
+    // A full reconcile round, which runs both sides through their internal
+    // announces. It may legitimately carry the entry as part of a delta — what
+    // it may not do is send the queued operation.
+    await b.announce();
+    await converge(pair, [a, b], 40);
+    expect(out).not.toContain("op");
+
+    // And the queue survived it: the button still has something to send.
+    out.length = 0;
+    await a.announce();
+    await converge(pair, [a, b]);
+    expect(out).toContain("op");
+
+    await a.stop();
+    await b.stop();
+  });
+
+  /**
    * The refusal every consumer of this plane meets first.
    *
    * A database whose access controller names one writer replicates perfectly on
