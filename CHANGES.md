@@ -1,5 +1,31 @@
 # Changes
 
+## 0.16.0 (2026-09-29)
+
+### Added
+- **Operations can wait for a button** (#141). `announceOnLocalUpdate: false` is how an application
+  says *"typing must not spend airtime — a button decides"*. On the delta plane that rightly means
+  do not watch local writes at all; on the operation plane it cannot, because the write still has to
+  be **remembered** or the button has nothing to send. Until this, setting `liveUpdates:
+  "operations"` alongside that flag changed nothing whatsoever — measured in funkpost's browser, the
+  wire still showed `→ blocks 860 B` and no `→ op` anywhere.
+
+  The hook now registers on the operation plane either way, and only what it does with the entry
+  differs: ship it, or queue it. `sync.announce()` — what a send button calls — sends the queue if
+  there is one, and otherwise means what it always did, a request to reconcile.
+
+  **Internal announces never flush.** The acknowledgement that ends a `blocks` delivery must not
+  spend somebody's queued writes on its own; that decision belongs to the application.
+
+  Past `MAX_PENDING_OPS` (16) the batch goes as a delta instead, and the reason is not memory: the
+  outbox holds `maxOutbox` messages and sheds the oldest, and an operation is the one message here
+  that **cannot be re-derived** — `announce`, `want` and `blocks` are all asked for again. A batch
+  long enough to overflow the outbox would lose writes without saying so. One delta is one message
+  and complete by construction.
+
+  Measured end to end in funkpost, through its own send button, for one added todo:
+  **`→ blocks 860 B` became `→ op 114 B`.**
+
 ## 0.15.0 (2026-09-29)
 
 ### Added
