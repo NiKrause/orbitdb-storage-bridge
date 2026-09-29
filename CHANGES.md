@@ -1,5 +1,57 @@
 # Changes
 
+## 0.15.0 (2026-09-29)
+
+### Added
+- **`liveUpdates: "operations"` — carry the change, not the entry that held it** (#135). A keyvalue
+  entry holding `{text, done, ts}` costs **1774 B** on the air once the delta plane has put the
+  entry and its identity block there. The operation inside it — `{op, key, value}`, which OrbitDB
+  hands to every `update` listener already — costs **86 B**. Measured over funkpost's Meshtastic
+  courier with framing, ARQ and duty-cycle pacing, for one further change to a list both sides
+  hold. Twenty times, or three and a half minutes against ten seconds on a carrier moving half a
+  kilobyte a minute.
+
+  The default stays `"delta"`, so nothing changes for a consumer that does not ask.
+
+  One new wire message and one optional field on `announce`:
+
+  ```
+  { v, tag, p, t: "op", id: bytes8, o: { op, key, value } }
+  { v, tag, p, t: "announce", heads: [hash], r? }        r: please reconcile
+  ```
+
+  `id` is eight bytes from the origin entry's hash, so every retransmission of one change carries
+  the same id and is performed once; a bounded seen-set remembers them, including our own on the
+  way out, so a mesh repeating us cannot make us perform our own write again.
+
+  **A cold join still goes through the delta plane** — an operation carries no manifest. `announce()`
+  remains the repair, and now says so on the wire: divergent logs are this plane's ordinary state,
+  so an announce without `r` is noted and left alone.
+
+  What it costs, and none of it is hidden:
+
+  - **The two logs diverge.** Each device holds its own entry for the same change. `o.key` is what
+    keeps the *view* single: a keyvalue store resolves to the latest value **per key**, so two
+    entries under one key are one row. The receiver must therefore perform the change under the
+    **sender's** key and never invent one — which is what `performOperation` does.
+  - **Two devices editing one key while both are offline can disagree** until an IP path merges
+    them, and then one edit is gone. A CRDT would not; an oplog with last-write-wins does.
+  - **Nothing is signed end to end.** The receiver vouches for the change with its own identity, so
+    trust rests on the carrier. The sender id in `p` is not authentication.
+  - **The receiver must be allowed to write**, because it performs the change as its own write. A
+    database whose access controller excludes it refuses outright, and the refusal now says that
+    choosing this plane is what made it matter. This is also where a device pairing belongs: two
+    devices that have met put each other's identity in the write set.
+  - **A lost operation is lost.** `send`'s own comment — that a dropped message is re-derivable
+    because a peer still wanting it asks again — holds for `announce`/`want`/`blocks` and *not* for
+    `op`.
+
+### Fixed
+- **The presence timeout test raced itself** (#136). It set `peerTimeoutMs: 1` and then asserted the
+  peer was still present; convergence does real OrbitDB work and a loaded runner stretches it well
+  past a millisecond, so a scheduled run of `main` went red and a re-run went green. One window,
+  wide enough that being present is not a race.
+
 ## 0.14.1 (2026-09-25)
 
 ### Fixed
