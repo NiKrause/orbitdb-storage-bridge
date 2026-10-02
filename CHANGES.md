@@ -3,6 +3,25 @@
 ## 0.16.0 (2026-09-29)
 
 ### Added
+- **Several databases in one backup, and back.** The metadata's `databases` was always a list,
+  but every writer put one database in it and `restoreFromCID` read only `databases[0]`. An
+  application whose state is eight OrbitDB databases had to bundle and restore them itself.
+  - `bundleDatabases(databases, { onProgress })` (new export `./extract-blocks`, which also
+    exports `extractDatabaseBlocks` at last) packs every block of several open databases into
+    one Map and writes the metadata for all of them, each with its **heads**. A writer's
+    identity shared by all of them is kept once. `onProgress` reports each database with its
+    entries and blocks, for a page that wants to show what it packed.
+  - `restoreFromBlocks(orbitdb, blocks, metadata)` (in `./restore-cid`, still without a logger
+    or a Storacha client) puts every named database back, from blocks already in hand: a backup
+    the application sealed itself and has just opened, or a file from somewhere else. Each
+    database's manifest must be among the blocks. Heads come from the metadata, or are found per
+    log in the blocks when the metadata states none. Only dag-cbor blocks go into a log's own
+    storage; raw blocks that belong to something else (an application's files) go into the
+    blockstore only.
+  - `restoreFromCID` now restores every database its metadata names. Its answer is unchanged
+    for one database, and `databases` lists them all.
+  - Needed by Le-Space/belege's backup (Le-Space/belege#77): eight databases and the receipt files
+    in one sealed file.
 - **Other keys may keep things for an account** (`backends/aleph-pin`). One funded account can let
   other keys send STORE messages on its behalf, for example a key a browser derives from a
   passkey, one per person or device, so that no wallet and no server has to be online to keep a
