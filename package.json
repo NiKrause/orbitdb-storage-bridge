@@ -15,6 +15,7 @@
     "./pointer-ipns": "./lib/pointer-ipns.js",
     "./dehydrate": "./lib/dehydrate.js",
     "./restore-cid": "./lib/restore-cid.js",
+    "./extract-blocks": "./lib/extract-blocks.js",
     "./gateway-fetch": "./lib/gateway-fetch.js",
     "./peer-fetch": "./lib/peer-fetch.js",
     "./backends/types": "./lib/backends/types.js",

@@ -297,7 +297,9 @@ Say these out loud before building on it:
 - `@le-space/orbitdb-storage-bridge/pointer-ipns` — `derivePointerKey()`,
   `publishPointer()`, `resolvePointer()`
 - `@le-space/orbitdb-storage-bridge/backup-car`, `/restore-cid` — the CAR and the
-  metadata underneath
+  metadata underneath; `restoreFromBlocks()` for blocks already in hand
+- `@le-space/orbitdb-storage-bridge/extract-blocks` — `extractDatabaseBlocks()`, and
+  `bundleDatabases()` for several databases in one backup
 - `@le-space/orbitdb-identity-provider-webauthn-did` —
   `restoreIdentityFromAuthenticator()` (0.7.0: `restored.credential`), `recoverPublicKey()`,
   `prfInputForRelyingParty()`, `deriveSigningKeyBytes()`
