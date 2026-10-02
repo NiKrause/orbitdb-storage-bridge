@@ -1,5 +1,16 @@
 # Changes
 
+## 0.16.1 (2026-10-02)
+
+### Fixed
+- **An encrypted database restores** (`restoreFromBlocks`, and with it `restoreFromCID`). A head
+  was joined from its raw dag-cbor fields. For a database opened with `encryption`, those are not
+  the entry OrbitDB expects, so `joinEntry` threw (*"`undefined` is not supported by the IPLD
+  Data Model"*). The restore went on and reported the database with `joined: 0`, and the
+  database came back empty. Heads are now read through the log (`log.get`), which decodes its
+  own entries, with the raw fields as the fallback. Found by Le-Space/belege, whose eight
+  databases are all encrypted. Only unencrypted databases were tested before.
+
 ## 0.16.0 (2026-09-29)
 
 ### Added
