@@ -163,3 +163,33 @@ describe("restoreFromCID, now with more than one database", () => {
     ]);
   });
 });
+
+describe("an encrypted database", () => {
+  // OrbitDB's `encryption.data`: a reversible stand-in for real sealing, so
+  // the stored payload is not the plain value and must be decrypted to join.
+  const MARK = 0xee;
+  const encryption = {
+    data: {
+      encrypt: async (bytes) => new Uint8Array([MARK, ...bytes]),
+      decrypt: async (bytes) => {
+        if (bytes[0] !== MARK) throw new Error("not sealed");
+        return bytes.subarray(1);
+      },
+    },
+  };
+
+  test("comes back: its heads are joined as the log decodes them, not as raw fields", async () => {
+    const sealed = await alice.orbitdb.open("bundle-sealed", { type: "keyvalue", encryption, ...open });
+    await sealed.put("amount", "-52.59");
+    await sealed.put("amount", "-12.34");
+
+    const { blocks, metadata } = await bundleDatabases([sealed]);
+    const restored = await restoreFromBlocks(carol.orbitdb, blocks, metadata, {
+      open: { encryption, ...open },
+    });
+
+    expect(restored.databases[0].joined).toBe(1);
+    expect(await restored.databases[0].database.get("amount")).toBe("-12.34");
+    await sealed.close();
+  });
+});
