@@ -3,6 +3,24 @@
 ## 0.16.0 (2026-09-29)
 
 ### Added
+- **Other keys may keep things for an account** (`backends/aleph-pin`). One funded account can let
+  other keys send STORE messages on its behalf, for example a key a browser derives from a
+  passkey, one per person or device, so that no wallet and no server has to be online to keep a
+  backup.
+  - `createAlephPin({ sender, owner, sign })`: the STORE names `owner` as the account it is for,
+    while `sender` signs. Without `owner` nothing changes.
+  - `createAlephAuthorizer({ owner, sign })` reads, grants (`authorize`) and revokes (`revoke`)
+    entries in the owner's `security` aggregate, which is Aleph's own permission list.
+    `buildAuthorizationMessage` builds the AGGREGATE without signing it. A grant replaces one for
+    the same address and keeps the others, because an aggregate key is replaced as a whole.
+  - Measured against `api2.aleph.im` on 2026-10-02 with throwaway keys and random bytes:
+    - the grant is `processed`, and reads back;
+    - the delegate's STORE for the owner is `processed`;
+    - a STORE from a key without a grant, and the delegate on a channel outside its grant, are
+      first `pending`, then `rejected`.
+  - Not yet known: which balance Aleph charges for a delegate's STORE. The docs do not say, and
+    the probe's accounts held nothing.
+
 - **Operations can wait for a button** (#141). `announceOnLocalUpdate: false` is how an application
   says *"typing must not spend airtime — a button decides"*. On the delta plane that rightly means
   do not watch local writes at all; on the operation plane it cannot, because the write still has to

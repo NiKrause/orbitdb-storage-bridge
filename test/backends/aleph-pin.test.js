@@ -15,8 +15,10 @@ import { jest, describe, test, expect } from "@jest/globals";
 import { createHash } from "node:crypto";
 import {
   buildStoreMessage,
+  buildAuthorizationMessage,
   signaturePayload,
   createAlephPin,
+  createAlephAuthorizer,
   DEFAULT_ALEPH_CHANNEL,
 } from "../../lib/backends/aleph-pin.js";
 import { createAlephBackend } from "../../lib/backends/aleph.js";
@@ -180,5 +182,108 @@ describe("wired into the backend", () => {
     expect(handle.id).toBe(CID);
     expect(handle.cid).toBe(CID);
     expect(handle.retained).toBe(true);
+  });
+});
+
+describe("signing for another account", () => {
+  const OWNER = "0xAbCdEf0123456789aBcDeF0123456789AbCdEf01";
+  const DELEGATE = "0x9999999999999999999999999999999999999999";
+
+  test("a delegate's STORE is signed by the delegate and names the owner", async () => {
+    const fetchImpl = recordingFetch();
+    const seen = [];
+    const pin = createAlephPin({
+      sender: DELEGATE,
+      owner: OWNER,
+      sign: async (address, payload) => (seen.push([address, payload]), SIGNATURE),
+      fetch: fetchImpl,
+    });
+    await pin(CID);
+
+    const { message } = fetchImpl.calls[0].body;
+    expect(message.sender).toBe(DELEGATE);
+    expect(JSON.parse(message.item_content).address).toBe(OWNER);
+    // The delegate signs, over its own address: the owner's key is not involved.
+    expect(seen[0][0]).toBe(DELEGATE);
+    expect(seen[0][1]).toBe(signaturePayload(message));
+  });
+
+  test("without an owner nothing changes: the content names the sender", async () => {
+    const message = await buildStoreMessage({ sender: DELEGATE, cid: CID, now: 1 });
+    expect(JSON.parse(message.item_content).address).toBe(DELEGATE);
+  });
+
+  test("the grant is the owner's AGGREGATE on the security channel, the whole list in it", async () => {
+    const authorizations = [{ address: DELEGATE, types: ["STORE"], channels: ["BELEGE-BACKUP"], chain: "ETH" }];
+    const message = await buildAuthorizationMessage({ owner: OWNER, authorizations, now: 7 });
+    expect(message).toMatchObject({ sender: OWNER, chain: "ETH", type: "AGGREGATE", channel: "security", item_type: "inline" });
+    expect(JSON.parse(message.item_content)).toEqual({
+      address: OWNER,
+      key: "security",
+      content: { authorizations },
+      time: 7,
+    });
+    expect(message.item_hash).toBe(createHash("sha256").update(message.item_content).digest("hex"));
+    await expect(buildAuthorizationMessage({ owner: OWNER, authorizations: [{ types: ["STORE"] }] })).rejects.toThrow(
+      /delegate's address/,
+    );
+  });
+
+  /** A fetch that answers the owner's security aggregate, and records posts. */
+  function aggregateFetch(existing) {
+    const posts = [];
+    const fetchImpl = async (url, init) => {
+      if (!init) {
+        expect(url).toBe(`https://api2.aleph.im/api/v0/aggregates/${OWNER}.json?keys=security`);
+        if (!existing) return { ok: false, status: 404, json: async () => ({}), text: async () => "No aggregate found" };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ address: OWNER, data: { security: { authorizations: existing } } }),
+        };
+      }
+      posts.push(JSON.parse(init.body).message);
+      return { ok: true, status: 200, json: async () => ({ message_status: "processed" }), text: async () => "" };
+    };
+    fetchImpl.posts = posts;
+    return fetchImpl;
+  }
+
+  test("authorize keeps the other grants and replaces one for the same address; revoke takes one away", async () => {
+    const other = { address: "0x1111111111111111111111111111111111111111", types: ["POST"] };
+    const old = { address: DELEGATE.toUpperCase().replace("0X", "0x"), types: ["STORE"] };
+    const fetchImpl = aggregateFetch([other, old]);
+    const signed = [];
+    const authorizer = createAlephAuthorizer({
+      owner: OWNER,
+      sign: async (address) => (signed.push(address), SIGNATURE),
+      fetch: fetchImpl,
+    });
+
+    const granted = await authorizer.authorize({ address: DELEGATE, types: ["STORE"], channels: ["BELEGE-BACKUP"] });
+    expect(granted.status).toBe("processed");
+    expect(JSON.parse(fetchImpl.posts[0].item_content).content.authorizations).toEqual([
+      other,
+      { address: DELEGATE, types: ["STORE"], channels: ["BELEGE-BACKUP"] },
+    ]);
+    expect(signed).toEqual([OWNER]);
+
+    await authorizer.revoke(DELEGATE);
+    expect(JSON.parse(fetchImpl.posts[1].item_content).content.authorizations).toEqual([other]);
+  });
+
+  test("an owner with no permissions yet reads as none, and the first grant is the whole list", async () => {
+    const fetchImpl = aggregateFetch(null);
+    const authorizer = createAlephAuthorizer({ owner: OWNER, sign: async () => SIGNATURE, fetch: fetchImpl });
+    expect(await authorizer.read()).toEqual([]);
+    await authorizer.authorize({ address: DELEGATE, types: ["STORE"] });
+    expect(JSON.parse(fetchImpl.posts[0].item_content).content.authorizations).toEqual([
+      { address: DELEGATE, types: ["STORE"] },
+    ]);
+  });
+
+  test("it refuses to be built without the owner or a signer", () => {
+    expect(() => createAlephAuthorizer({ sign: async () => SIGNATURE })).toThrow(/owner/);
+    expect(() => createAlephAuthorizer({ owner: OWNER })).toThrow(/sign/);
   });
 });
