@@ -26,7 +26,7 @@ Where "somewhere else" is, is a choice:
 | Backend | Needs | |
 | --- | --- | --- |
 | `aleph` | nothing | the only backend a browser can write to with no key; ingest only |
-| `aleph-pin` | a wallet | the signed STORE message that makes Aleph keep it |
+| `aleph-pin` | a signing key: the paying account's, or one it authorised | the signed STORE message that makes Aleph keep it, paid in credits |
 | `pinata` | a scoped JWT | pin-by-CID as well as CAR upload |
 | `lighthouse` | an API key | pay once, stored in perpetuity |
 | `memory` | nothing | in-process, for tests and demos |
