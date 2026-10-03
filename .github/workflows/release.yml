@@ -64,7 +64,7 @@ jobs:
       # courier-sync is the suite downstream projects depend on; the storage
       # backends ship in the package too, so they gate it as well.
       - name: Run the tests that need no secrets
-        run: npx jest test/courier-sync.test.js test/car-storage.test.js test/restore-cid.test.js test/restore-from-blocks.test.js test/backends/ --forceExit
+        run: npx jest test/courier-sync.test.js test/car-storage.test.js test/restore-cid.test.js test/restore-from-blocks.test.js test/app-backup.test.js test/backends/ --forceExit
         env:
           NODE_OPTIONS: "--experimental-vm-modules --no-warnings"
 
@@ -129,7 +129,7 @@ jobs:
 
       - name: Run the tests that need no secrets
         if: github.event_name == 'push'
-        run: npx jest test/courier-sync.test.js test/car-storage.test.js test/restore-cid.test.js test/restore-from-blocks.test.js test/backends/ --forceExit
+        run: npx jest test/courier-sync.test.js test/car-storage.test.js test/restore-cid.test.js test/restore-from-blocks.test.js test/app-backup.test.js test/backends/ --forceExit
         env:
           NODE_OPTIONS: "--experimental-vm-modules --no-warnings"
 

@@ -34,6 +34,26 @@
   - Aleph's `addresses` filter matches the sender and misses a delegate's STORE. `owners` matches
     the account the STORE is for (measured 2026-10-03).
   - So an empty device finds a backup with nothing but the paying account's public address.
+- **An application's backup in one sealed file** (new export `./app-backup`, #147). Le-Space/belege
+  had built this inside the application (`archive.js`); Le-Space/invoice needs the same, plus room
+  for one sealed key slot per passkey. So it lives here now.
+  - **The file:** `"OSBA" | version | header length | header | envelope`.
+    - The header is the application's and is read without a key (`readAppBackupHeader`), e.g. for
+      a keyring. The manifest names its SHA-256, so a swapped header is refused.
+    - The envelope is the package's `OSBE`, around a CAR encrypted by the application's
+      `encrypt`. The package still holds no keys.
+  - **`buildAppBackup({ app, databases, encrypt, blocks?, header?, appVersion?, extra? })`** packs
+    every database with `bundleDatabases`, together with blocks of the application's own (belege's
+    receipt files). The CAR's root is a manifest naming the application.
+  - **`openAppBackup(bytes, { decrypt, app? })`** checks every block against its CID. It refuses a
+    backup of another application, and a header that is not the one the backup was made with.
+  - **`restoreAppBackup({ orbitdb, opened, addresses, open })`** puts the books back through
+    `restoreFromBlocks`.
+    - It merges and never replaces.
+    - It refuses a backup whose databases are not these books.
+    - A head that cannot be joined fails the restore, where `restoreFromBlocks` alone only warns.
+  - `docs/APP-BACKUP.md` covers the whole path: build, upload to Aleph, the browser's STORE as a
+    delegate, finding the backup by the paying account, restore.
 
 ### Documented
 - **Who pays for a delegate's STORE.** It is the owner, the account named in `content.address`.
