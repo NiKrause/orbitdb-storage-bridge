@@ -83,6 +83,7 @@ Galaxy A57 with the same key brought the database back and wrote to it. Source:
 | [docs/STORAGE-BACKENDS.md](docs/STORAGE-BACKENDS.md) | every backend evaluated — prices, limits, and what has been verified against a live account |
 | [docs/RECOVERY-ON-A-SECOND-DEVICE.md](docs/RECOVERY-ON-A-SECOND-DEVICE.md) | the passkey recovery procedure, step by step |
 | [docs/CAR-BACKUP.md](docs/CAR-BACKUP.md) | CAR-based timestamped backups |
+| [docs/APP-BACKUP.md](docs/APP-BACKUP.md) | an application's backup in one sealed file: several databases, a keyring header, kept on Aleph from the browser, restored by merging |
 | [SVELTE-COMPONENTS.md](SVELTE-COMPONENTS.md) | the browser components — older than this repository's copy of them; [docs/STORACHA-UI-HISTORY.md](docs/STORACHA-UI-HISTORY.md) records what each piece could do and where it went |
 | [docs/LOGGING.md](docs/LOGGING.md) | debug namespaces, in Node and in a browser |
 | [ROADMAP.md](ROADMAP.md) | what is planned |
