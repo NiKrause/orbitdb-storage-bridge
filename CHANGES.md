@@ -1,5 +1,45 @@
 # Changes
 
+## Unreleased
+
+### Changed
+- **A STORE is paid in credits** (`backends/aleph-pin`). `buildStoreMessage` and `createAlephPin`
+  put `payment: { type: "credit" }` into the STORE, as Aleph's own CLI does by default.
+  - Without the field Aleph books a STORE as `hold`: ALEPH tokens locked on the account, a model
+    it has deprecated. An account funded with credits covers nothing that way.
+  - Measured on 2026-10-03: a `hold` STORE for an account holding nothing was processed at once,
+    so "processed" says nothing about cover there.
+  - A credit STORE is rejected unless the account has credit for at least a day
+    (`min_runtime_days: 1`). 2 MiB needed 107.8 credits, about 54 per MiB and day.
+  - `payment: "hold"`, or `payment: null` for no field at all as up to 0.16.1, keeps the old
+    message. (#147)
+- **`pinCid` says what Aleph answered** (`backends/aleph`).
+  - The handle carries the STORE's `status` and `itemHash`.
+  - `retained` is true only once the STORE is `processed`. A `pending` one is no longer reported
+    as kept.
+  - A `pin` function that reports nothing keeps the old answer.
+- **An upload no longer claims to be retained** (`backends/aleph`). `putBlob`'s handle said
+  `retained: Boolean(pin)`, but `putBlob` never sends a STORE; it says `false` now. Keeping is
+  what `pinCid` does.
+
+### Added
+- **`waitForMessage(itemHash)`** (`backends/aleph-pin`) follows a message until Aleph has decided
+  about it.
+  - It ends with `processed`, or with `rejected` plus `errorCode` and `details`. For a credit
+    STORE without enough credit, the details say how much the account had and how much is needed.
+  - A message still pending when the time is up comes back as
+    `{ status: "pending", timedOut: true }` instead of an error.
+- **`listAlephStores({ owner, channel })`** (`backends/aleph-pin`) lists the STORE messages kept
+  for an account, newest first, including those a delegate sent for it.
+  - Aleph's `addresses` filter matches the sender and misses a delegate's STORE. `owners` matches
+    the account the STORE is for (measured 2026-10-03).
+  - So an empty device finds a backup with nothing but the paying account's public address.
+
+### Documented
+- **Who pays for a delegate's STORE.** It is the owner, the account named in `content.address`.
+  Aleph checks the owner's credit and books the cost to it, not to the delegate (measured
+  2026-10-03, #147).
+
 ## 0.16.1 (2026-10-02)
 
 ### Fixed

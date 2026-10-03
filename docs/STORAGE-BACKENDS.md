@@ -252,9 +252,29 @@ the question this section exists for. Two qualifications, both from the same pro
   pin, and the browser needs a wallet but never a bearer token. Retrieval is
   `https://ipfs.aleph.cloud/ipfs/<cid>`.
 
-**Cost** is the open question. The figure in circulation — 3 MB of storage per ALEPH token held by
-the signing wallet — is from the November 2022 tokenomics, and `relay-button` already pays for VMs
-in credits, so the model has moved. Check it against a current account before planning around it.
+### Cost, and who pays
+
+Measured on 2026-10-03 against `api2.aleph.im`, with throwaway accounts and 2 MiB of random bytes
+([#147](https://github.com/NiKrause/orbitdb-storage-bridge/issues/147)).
+
+- **Credits, by the day.** A STORE whose content carries `payment: { type: "credit" }` is paid
+  from the account's credits.
+  - About 54 credits per MiB and day. 1 USD buys about 1,000,000 credits, so 100 MiB kept for a
+    year costs about 2 million credits.
+  - Aleph wants credit for at least one day (`min_runtime_days: 1`). Otherwise it rejects the
+    STORE with `error_code: 6`, and the details name how much the account had and how much is
+    needed.
+  - `aleph-pin` sends this field by default since #147.
+- **Without `payment`, the STORE is `hold`.** That is the 2022 model: 3 MiB per ALEPH token, locked
+  on the account, and deprecated. Such a STORE was processed at once for an account holding nothing,
+  which says nothing about whether the file is covered.
+- **The owner pays, not the delegate.** One funded account can let other keys send STORE messages
+  for it: its `security` aggregate, set with `createAlephAuthorizer`. A delegate with no credit at
+  all stored for a funded owner. The owner's credit was checked, and the cost appeared on the
+  owner, not on the delegate. So the key in a browser signs, and the account pays.
+- **Listing by the owner.** `messages.json?owners=<account>` finds every STORE kept for an account,
+  a delegate's included; `addresses=` matches the sender and misses those. `listAlephStores` wraps
+  this, so a page can find a backup by the paying account's public address alone.
 
 ## 7. Your own relay
 
