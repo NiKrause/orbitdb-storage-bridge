@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased
+## 0.17.0 (2026-10-04)
 
 ### Changed
 - **A STORE is paid in credits** (`backends/aleph-pin`). `buildStoreMessage` and `createAlephPin`
