@@ -44,22 +44,15 @@ predicts the past helps nobody. [CHANGES.md](CHANGES.md) is the record of what s
 
 ## Open
 
-- [ ] **Live parallel persistence:** hand an open database a backend-backed OrbitDB
-      `ComposedStorage`, so every block is written to a backend **as it is created** — during sync
-      and after each update — rather than only when a backup runs.
-  - Today a block becomes durable elsewhere only if bitswap reaches a peer that keeps it, gossipsub
-    reaches a subscriber, or somebody runs a backup. All three need another party to be reachable at
-    that moment; a write-through storage does not.
-  - The seam exists: [`lib/car-storage.js`](lib/car-storage.js) implements OrbitDB's storage shape
-    (`put`/`get`/`del`/`iterator`/`merge`) against a CAR file, and `ComposedStorage` is built to fan
-    one write out to several places. This points that seam at a network backend. As of 2026-09-26
-    `ComposedStorage` appears nowhere else in the package, so nothing of this is started.
-  - Aleph is the first candidate, because it is the only backend a browser can write to with no key
-    at all. See [docs/STORAGE-BACKENDS.md](docs/STORAGE-BACKENDS.md); retention there needs the
-    wallet-signed STORE message, not the ingest alone.
-  - Settle first what a write-through does when the backend is unreachable. Blocking a local write
-    on a network round trip would make the database exactly as available as the backend, which is
-    the opposite of the point — so it queues, and the queue is the design.
+- [x] **Live parallel persistence** — delivered as *increments*, not as a write-through storage
+      (`@le-space/orbitdb-storage-bridge/live-backup`, [#144](https://github.com/NiKrause/orbitdb-storage-bridge/issues/144),
+      [docs/LIVE-BACKUP.md](docs/LIVE-BACKUP.md)). A watcher keeps, per database, the heads it last
+      shipped; a flush walks from the current heads back to them and ships what it passed as one
+      small CAR, through any backend, kept with one STORE. The queue the item asked for is the
+      log itself: a local write never waits, an unreachable backend only makes the next increment
+      larger, and a restart rebuilds what was shipped from a few persisted hashes. A
+      `ComposedStorage` that writes every block through was rejected on the way (one STORE per
+      block, hundreds of messages a day, and a service that sees when someone works).
 - [ ] **UCAN 1.0.** Nothing in `CHANGES.md` mentions it and the dependencies are ucanto 9/10 with
       `@ipld/dag-ucan` 3, so this is untouched.
 - [ ] **Social backup between devices with DKG** (decentralized key generation). Untouched; the
