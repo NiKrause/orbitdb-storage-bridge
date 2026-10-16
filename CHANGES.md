@@ -1,5 +1,38 @@
 # Changes
 
+## Unreleased
+
+### Added
+- **Increments between two full backups** (new export `./live-backup`, #144). `createLiveBackup`
+  watches open databases and ships what was written since the last increment as one small CAR —
+  soon after the write, with nobody clicking and no other peer online. A full backup stays the
+  baseline; this is what happens in between.
+  - **Write-behind, never write-through.** A local write never waits for a service. The watcher
+    keeps, per database, the heads it last shipped; a flush walks from the current heads back over
+    `next` to them and ships what it passed. Entries that arrived by replication are reachable
+    from the heads like any other, so they ship too. What survives a restart is a sequence number
+    and a few hashes per database; the set of shipped hashes is rebuilt from them by walking the
+    log once.
+  - **One upload, one STORE.** The CAR's root is a dag-cbor manifest
+    (`{ kind: "increment", v: 1, sequence, base, previous, metadata }`). Every increment carries
+    each database's manifest and access controller and the identity of every writer it has entries
+    from, so a complete chain restores without a base. It goes through any backend's `putBlob`;
+    a handle that says `retained: false` is followed by `pinCid`. Sealing is `withEncryption`
+    around the backend, as for everything else.
+  - **An unreachable backend loses nothing.** The flush fails, the state stays, and the next flush
+    ships everything still pending. `status()` reports pending updates, the last increment and the
+    last failure.
+  - `readIncrement`, `mergeIncrements` and `restoreFromIncrements` put a base and its increments
+    back through `restoreFromBlocks`, each database joined at the heads of the newest source that
+    names it. `rebase({ base })` after a full backup starts the count again.
+  - `joinIncrements(database, …)` does the same into a database that is open *now*, without
+    closing it: for an application whose books are on screen.
+  - Fourteen tests on real OrbitDB nodes, offline: first and second increment, restore from the
+    chain alone and from base plus increments, an outage, a replicated entry from another writer,
+    `after`/`every` triggers, a restart from persisted state, databases watched later, a backend
+    that must be asked to keep, sealing, the application's own blocks, a join into an open database, and the backlog a start ships.
+    [docs/LIVE-BACKUP.md](docs/LIVE-BACKUP.md) covers the whole path.
+
 ## 0.17.0 (2026-10-04)
 
 ### Changed
