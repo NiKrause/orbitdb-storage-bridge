@@ -698,7 +698,7 @@ describe("increments", () => {
     const live = createLiveBackup({
       databases: [db],
       backend,
-      settle: async (kept) => ({
+      confirm: async (kept) => ({
         ...kept,
         status: refuse ? "rejected" : "processed",
         errorCode: refuse ? 42 : undefined,

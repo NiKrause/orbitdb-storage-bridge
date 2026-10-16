@@ -30,7 +30,7 @@
   go into the blockstore the caller names, e.g. `orbitdb.ipfs.blockstore`; without it they are
   counted in `skippedRaw` and left out. OrbitDB's log storage refused their base32 names, so
   an increment with a receipt file used to throw halfway.
-- **`createLiveBackup({ settle })`**: a hook `(kept, handle) => kept` to follow a backend's
+- **`createLiveBackup({ confirm })`**: a hook `(kept, handle) => kept` to follow a backend's
   answer before the increment counts as shipped — Aleph answers `pending` first and may
   reject later (no credit, no grant). A settled `status: "rejected"` fails the flush and the
   state stays, so the next one ships it all again.
