@@ -534,6 +534,36 @@ describe("increments", () => {
     expect(result).toMatchObject({ joined: 1, heads: 1 });
     expect(await theirs.get("a")).toBe(3);
     expect(await theirs.get("b")).toBe(2);
+
+    // What came back counts as shipped, and the numbering carries on: a
+    // watcher on Dave's copy, told so, ships nothing now and continues at 3.
+    const davesStore = new Map();
+    const davesLive = createLiveBackup({
+      databases: [theirs],
+      backend: createMemoryBackend({ store: davesStore }),
+    });
+    await davesLive.rebase();
+    expect(await davesLive.flush()).toBeNull();
+    const saved = {
+      load: async () => ({
+        v: 1,
+        sequence: 2,
+        base: null,
+        previous: "x",
+        databases: {},
+      }),
+      save: async () => {},
+    };
+    const continuing = createLiveBackup({
+      databases: [theirs],
+      backend: createMemoryBackend({ store: davesStore }),
+      state: saved,
+    });
+    await continuing.rebase();
+    await theirs.put("c", 4);
+    expect((await continuing.flush()).sequence).toBe(3);
+    await davesLive.stop();
+    await continuing.stop();
     await expect(joinIncrements(mine, { increments: [] })).rejects.toThrow();
     await theirs.close();
     await live.stop();

@@ -73,7 +73,8 @@ await live.start();
 - `flush()` ships what is pending now and resolves with what went out, or `null` when nothing was
   new. One flush at a time; a flush asked for during one runs after it.
 - `rebase({ base })` after a full backup: everything now in the databases counts as shipped, and the
-  increments start again at 1 from that base.
+  increments start again at 1 from that base. `rebase()` without a base, after a restore joined into
+  the open databases: what came back is not sent out again, and the numbering carries on.
 - `status()`: `sequence`, `base`, `previous`, `pending` updates, `lastShipped`, `lastError`,
   `failures`, `running`.
 - `blocks` is a function (or a Map) of blocks of the application's own to carry in the next
