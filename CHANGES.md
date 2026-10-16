@@ -1,5 +1,18 @@
 # Changes
 
+## Unreleased
+
+### Added
+- **Forgetting on Aleph** (`backends/aleph-pin`): `buildForgetMessage`, `createAlephForget` and
+  `forgetAlephStores`. A FORGET signed by the STOREs' owner (or a delegate authorized for it)
+  names them by item hash; the files they kept are unpinned and stop costing credits. The
+  driver's `deletion: false` stays true to the letter — a FORGET is the account's, not the
+  blob's — so this lives beside `createAlephPin`, shaped like it: the library never sees a key,
+  and `pending` is followed with `waitForMessage`. `forgetAlephStores` lists an account's STOREs
+  on a channel, spares what `keep` says (the newest full backup, say) and forgets the rest in
+  batches, reporting forgotten, kept and rejected by item hash. First consumer: simple-todo's
+  `archived01` ("delete the archive"); Le-Space/belege next.
+
 ## 0.18.0 (2026-10-16)
 
 ### Added
