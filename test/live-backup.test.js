@@ -193,7 +193,9 @@ describe("increments", () => {
       "water the plants",
       "read the manual",
     ]);
-    expect(result.databases[0].joined).toBe(1);
+    // Every source's heads are joined, the older one as a stale head: both count.
+    expect(result.databases[0].heads).toBe(2);
+    expect(result.databases[0].joined).toBeGreaterThanOrEqual(1);
     await live.stop();
   });
 
@@ -220,9 +222,13 @@ describe("increments", () => {
     expect(increment.manifest.base).toBe("base-1");
 
     const merged = mergeIncrements({ base, increments: [increment] });
+    // The union: the base's head and the increment's, so no branch is dropped.
     expect(merged.metadata.databases[0].heads).toEqual(
-      increment.manifest.metadata.databases[0].heads,
+      expect.arrayContaining(increment.manifest.metadata.databases[0].heads),
     );
+    expect(merged.metadata.databases[0].heads.length).toBeGreaterThanOrEqual(2);
+    expect(merged.gaps).toEqual([]);
+    expect(merged.duplicates).toEqual([]);
 
     const { values } = await restoredValues(
       carol,
@@ -552,7 +558,8 @@ describe("increments", () => {
     const result = await joinIncrements(theirs, {
       increments: await incrementsIn(backend, store),
     });
-    expect(result).toMatchObject({ joined: 1, heads: 1 });
+    expect(result.heads).toBe(2);
+    expect(result.joined).toBeGreaterThanOrEqual(1);
     expect(await theirs.get("a")).toBe(3);
     expect(await theirs.get("b")).toBe(2);
 
@@ -588,6 +595,171 @@ describe("increments", () => {
     await expect(joinIncrements(mine, { increments: [] })).rejects.toThrow();
     await theirs.close();
     await live.stop();
+  });
+
+  test("a chain with a hole is refused up front, and joined when the caller says so", async () => {
+    const store = new Map();
+    const backend = createMemoryBackend({ store });
+    const db = await alice.orbitdb.open("live-gap", {
+      type: "events",
+      ...open,
+    });
+    const live = createLiveBackup({ databases: [db], backend });
+    for (const word of ["one", "two", "three"]) {
+      await db.add(word);
+      await live.flush();
+    }
+    const [first, , third] = await incrementsIn(backend, store);
+    const merged = mergeIncrements({ increments: [first, third] });
+    expect(merged.gaps).toEqual([2]);
+    expect(mergeIncrements({ increments: [first, first] }).duplicates).toEqual([
+      1,
+    ]);
+    await expect(
+      restoreFromIncrements(dave.orbitdb, { increments: [first, third], open }),
+    ).rejects.toThrow(/sequence 2 missing/);
+    const result = await restoreFromIncrements(dave.orbitdb, {
+      increments: [first, third],
+      open,
+      allowGaps: true,
+    });
+    expect(result.sequences).toEqual([1, 3]);
+    await live.stop();
+  });
+
+  test("joinIncrements puts the application's own blocks into the blockstore it is given, and counts them otherwise", async () => {
+    const store = new Map();
+    const backend = createMemoryBackend({ store });
+    const db = await alice.orbitdb.open("live-join-own", {
+      type: "events",
+      ...open,
+    });
+    await db.add("with a file");
+    const file = new TextEncoder().encode("a receipt file, joined");
+    const { sha256 } = await import("multiformats/hashes/sha2");
+    const raw = await import("multiformats/codecs/raw");
+    const fileCid = CID.createV1(raw.code, await sha256.digest(file));
+    const own = new Map([[fileCid.toString(), { cid: fileCid, bytes: file }]]);
+    const live = createLiveBackup({
+      databases: [db],
+      backend,
+      blocks: () => own,
+    });
+    await live.flush();
+    const increments = await incrementsIn(backend, store);
+
+    for (const [name, { bytes }] of (await bundleDatabases([db])).blocks) {
+      await carol.helia.blockstore.put(CID.parse(name), bytes);
+    }
+    const theirs = await carol.orbitdb.open(db.address, {
+      type: "events",
+      ...open,
+    });
+    const counted = await joinIncrements(theirs, { increments });
+    expect(counted.skippedRaw).toBe(1);
+    expect(await carol.helia.blockstore.has(fileCid)).toBe(false);
+
+    const placed = await joinIncrements(theirs, {
+      increments,
+      blockstore: carol.helia.blockstore,
+    });
+    expect(placed.skippedRaw).toBeUndefined();
+    expect(await carol.helia.blockstore.has(fileCid)).toBe(true);
+    expect((await theirs.all()).map((e) => e.value)).toEqual(["with a file"]);
+    await theirs.close();
+    await live.stop();
+  });
+
+  test("a store that refuses to keep an increment fails the flush, and the state stays", async () => {
+    const store = new Map();
+    const inner = createMemoryBackend({ store });
+    let refuse = true;
+    const backend = defineBackend({
+      ...inner,
+      capabilities: { ...inner.capabilities, pinByCid: true },
+      putBlob: async (bytes, meta) => ({
+        ...(await inner.putBlob(bytes, meta)),
+        retained: false,
+      }),
+      pinCid: async (cid) => ({
+        id: cid,
+        cid,
+        backend: "memory",
+        retained: false,
+        status: "pending",
+        itemHash: "m1",
+      }),
+    });
+    const db = await alice.orbitdb.open("live-refused", {
+      type: "events",
+      ...open,
+    });
+    await db.add("not kept");
+    const live = createLiveBackup({
+      databases: [db],
+      backend,
+      settle: async (kept) => ({
+        ...kept,
+        status: refuse ? "rejected" : "processed",
+        errorCode: refuse ? 42 : undefined,
+      }),
+    });
+    await expect(live.flush()).rejects.toThrow(
+      /refused to keep increment 1 \(42\)/,
+    );
+    expect(live.status().sequence).toBe(0);
+    refuse = false;
+    const shipped = await live.flush();
+    expect(shipped.sequence).toBe(1);
+    expect(shipped.kept.status).toBe("processed");
+    await live.stop();
+  });
+
+  test("a persisted state this build does not read is refused, not restarted at 1", async () => {
+    const db = await alice.orbitdb.open("live-state-version", {
+      type: "events",
+      ...open,
+    });
+    const live = createLiveBackup({
+      databases: [db],
+      backend: createMemoryBackend(),
+      state: {
+        load: async () => ({ v: 99, sequence: 7 }),
+        save: async () => {},
+      },
+    });
+    await expect(live.flush()).rejects.toThrow(/version 99/);
+  });
+
+  test("unwatch during a flush leaves the state whole", async () => {
+    const store = new Map();
+    const inner = createMemoryBackend({ store });
+    let release;
+    const gate = new Promise((resolve) => (release = resolve));
+    const backend = defineBackend({
+      ...inner,
+      putBlob: async (bytes, meta) => {
+        await gate;
+        return inner.putBlob(bytes, meta);
+      },
+    });
+    const db = await alice.orbitdb.open("live-unwatch", {
+      type: "events",
+      ...open,
+    });
+    await db.add("going");
+    const live = createLiveBackup({ databases: [db], backend });
+    const inflight = live.flush();
+    await sleep(100);
+    live.unwatch(db);
+    release();
+    const shipped = await inflight;
+    expect(shipped.sequence).toBe(1);
+    expect(live.status()).toMatchObject({
+      sequence: 1,
+      watched: 0,
+      failures: 0,
+    });
   });
 
   test("readIncrement refuses a CAR that is not an increment", async () => {

@@ -11,7 +11,7 @@
  * says what went wrong.
  */
 
-import { describe, test, expect } from "@jest/globals";
+import { jest, describe, test, expect } from "@jest/globals";
 import { webcrypto } from "node:crypto";
 
 import { createMemoryBackend } from "../../lib/backends/memory.js";
@@ -26,7 +26,9 @@ import {
   ENVELOPE_VERSION,
 } from "../../lib/backends/encryption.js";
 
-const PLAINTEXT = new TextEncoder().encode("a CAR file would be here, and it is nobody else's business");
+const PLAINTEXT = new TextEncoder().encode(
+  "a CAR file would be here, and it is nobody else's business",
+);
 
 /** A stand-in cipher: reversible, obviously not secret, and easy to break on purpose. */
 const stubCipher = (marker = 7) => ({
@@ -39,8 +41,14 @@ const stubCipher = (marker = 7) => ({
 
 /** The real thing, as a browser would do it with a key derived from the passkey. */
 async function aesCipher(secret = "the security key's own secret") {
-  const raw = await webcrypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
-  const key = await webcrypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+  const raw = await webcrypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(secret),
+  );
+  const key = await webcrypto.subtle.importKey("raw", raw, "AES-GCM", false, [
+    "encrypt",
+    "decrypt",
+  ]);
   return {
     encrypt: async (bytes) => {
       const iv = webcrypto.getRandomValues(new Uint8Array(12));
@@ -50,7 +58,13 @@ async function aesCipher(secret = "the security key's own secret") {
       return { ciphertext, iv };
     },
     decrypt: async (ciphertext, iv) =>
-      new Uint8Array(await webcrypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext)),
+      new Uint8Array(
+        await webcrypto.subtle.decrypt(
+          { name: "AES-GCM", iv },
+          key,
+          ciphertext,
+        ),
+      ),
   };
 }
 
@@ -97,19 +111,36 @@ describe("a backup the service cannot read", () => {
 
     const handle = await written.putBlob(PLAINTEXT);
 
-    await expect(read.getBlob(handle)).rejects.toThrow(/different key|derivation/i);
+    await expect(read.getBlob(handle)).rejects.toThrow(
+      /different key|derivation/i,
+    );
   });
 });
 
 describe("bytes that are not ours", () => {
-  test("a plaintext backup from before this change still restores", async () => {
-    // A pointer does not say which kind it names, and refusing would make
-    // yesterday's backups unreadable for no gain in secrecy.
+  test("a plaintext backup is refused by default: a sealed archive never holds plaintext", async () => {
+    // Whoever answers the fetch could otherwise hand a plaintext backup of
+    // another database to a caller that brought a key — and it would open it.
     const store = createMemoryBackend();
     const handle = await store.putBlob(PLAINTEXT);
-    const backend = withEncryption(store, stubCipher());
+    await expect(
+      withEncryption(store, stubCipher()).getBlob(handle),
+    ).rejects.toThrow(/not encrypted/);
+  });
 
+  test("a plaintext backup from before encryption restores when asked for, and says so", async () => {
+    const store = createMemoryBackend();
+    const handle = await store.putBlob(PLAINTEXT);
+    const backend = withEncryption(store, {
+      ...stubCipher(),
+      allowPlaintextReads: true,
+    });
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
     const back = await backend.getBlob(handle);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/allowPlaintextReads/),
+    );
+    warn.mockRestore();
 
     expect(Buffer.from(back).equals(Buffer.from(PLAINTEXT))).toBe(true);
   });
@@ -117,7 +148,10 @@ describe("bytes that are not ours", () => {
   test("a caller who wants only encrypted reads can say so", async () => {
     const store = createMemoryBackend();
     const handle = await store.putBlob(PLAINTEXT);
-    const backend = withEncryption(store, { ...stubCipher(), allowPlaintextReads: false });
+    const backend = withEncryption(store, {
+      ...stubCipher(),
+      allowPlaintextReads: false,
+    });
 
     await expect(backend.getBlob(handle)).rejects.toThrow(/not encrypted/i);
   });
@@ -125,7 +159,9 @@ describe("bytes that are not ours", () => {
   test("a CAR does not look like an envelope", () => {
     // The magic has to be distinguishable from what a CAR and a JSON start
     // with, or a plaintext restore would try to decrypt.
-    const car = new Uint8Array([0x3a, 0xa2, 0x65, 0x72, 0x6f, 0x6f, 0x74, 0x73]);
+    const car = new Uint8Array([
+      0x3a, 0xa2, 0x65, 0x72, 0x6f, 0x6f, 0x74, 0x73,
+    ]);
     const json = new TextEncoder().encode('{"manifest":"zdpu…"}');
 
     expect(isEncrypted(car)).toBe(false);
@@ -163,7 +199,11 @@ describe("what it tells the rest of the package", () => {
     const capable = defineBackend({
       ...store,
       name: "capable",
-      capabilities: { ...store.capabilities, carImport: true, preservesInnerCids: true },
+      capabilities: {
+        ...store.capabilities,
+        carImport: true,
+        preservesInnerCids: true,
+      },
     });
 
     expect(capable.capabilities.carImport).toBe(true);
@@ -175,7 +215,9 @@ describe("what it tells the rest of the package", () => {
   });
 
   test("it refuses to pretend it has keys", () => {
-    expect(() => withEncryption(createMemoryBackend(), {})).toThrow(/encrypt and decrypt/);
+    expect(() => withEncryption(createMemoryBackend(), {})).toThrow(
+      /encrypt and decrypt/,
+    );
     expect(() => withEncryption(null, stubCipher())).toThrow(/backend to wrap/);
   });
 });
@@ -197,18 +239,34 @@ describe("the path a restore actually takes", () => {
     expect(Buffer.from(back).equals(Buffer.from(PLAINTEXT))).toBe(true);
   });
 
-  test("a plaintext backup still restores through it", async () => {
-    const fetchBytes = decryptingFetch(async () => PLAINTEXT, stubCipher());
+  test("a plaintext backup is refused through it by default", async () => {
+    await expect(
+      decryptingFetch(async () => PLAINTEXT, stubCipher())("bafyPlain"),
+    ).rejects.toThrow(/not encrypted/);
+  });
+
+  test("a plaintext backup still restores through it when asked for", async () => {
+    const fetchBytes = decryptingFetch(async () => PLAINTEXT, {
+      ...stubCipher(),
+      allowPlaintextReads: true,
+    });
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 
     const back = await fetchBytes("bafy…");
+    warn.mockRestore();
 
     expect(Buffer.from(back).equals(Buffer.from(PLAINTEXT))).toBe(true);
   });
 
   test("the wrong key names the CID it failed on", async () => {
     const store = createMemoryBackend();
-    const handle = await withEncryption(store, await aesCipher("one")).putBlob(PLAINTEXT);
-    const fetchBytes = decryptingFetch(async () => store.getBlob(handle), await aesCipher("other"));
+    const handle = await withEncryption(store, await aesCipher("one")).putBlob(
+      PLAINTEXT,
+    );
+    const fetchBytes = decryptingFetch(
+      async () => store.getBlob(handle),
+      await aesCipher("other"),
+    );
 
     await expect(fetchBytes("bafyTheOne")).rejects.toThrow(/bafyTheOne/);
   });
@@ -220,12 +278,16 @@ describe("when there is no key at hand", () => {
     const handle = await withEncryption(store, stubCipher()).putBlob(PLAINTEXT);
     const fetchBytes = explainIfEncrypted(async () => store.getBlob(handle));
 
-    await expect(fetchBytes("bafyEncrypted")).rejects.toThrow(/encrypted.*decrypt/is);
+    await expect(fetchBytes("bafyEncrypted")).rejects.toThrow(
+      /encrypted.*decrypt/is,
+    );
   });
 
   test("a plaintext backup passes through untouched", async () => {
     const fetchBytes = explainIfEncrypted(async () => PLAINTEXT);
 
-    expect(Buffer.from(await fetchBytes("bafy…")).equals(Buffer.from(PLAINTEXT))).toBe(true);
+    expect(
+      Buffer.from(await fetchBytes("bafy…")).equals(Buffer.from(PLAINTEXT)),
+    ).toBe(true);
   });
 });

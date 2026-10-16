@@ -14,7 +14,11 @@
  */
 
 import { jest, describe, test, expect } from "@jest/globals";
+import { CID as CIDClass } from "multiformats/cid";
+import { sha256 } from "multiformats/hashes/sha2";
+import * as raw from "multiformats/codecs/raw";
 import {
+  matchesRawCid,
   fetchFromGateways,
   DEFAULT_GATEWAYS,
   TRUSTLESS_GATEWAYS,
@@ -22,14 +26,19 @@ import {
   MAX_BACKOFF_MS,
 } from "../lib/gateway-fetch.js";
 
-const CID = "bafkreibjw4ccgiflcijrenzjpiptwsvhrkugkfzryan4wplryxfc6xrlrm";
 const BYTES = new Uint8Array([1, 2, 3, 4]);
+// A raw CID that really names BYTES: since 0.19.0 a gateway's answer to a raw
+// sha-256 CID is hashed, and bytes that do not match are not an answer.
+const CID = CIDClass.create(1, raw.code, await sha256.digest(BYTES)).toString();
 
 const answer = ({ status = 200, headers = {}, body = BYTES } = {}) => ({
   ok: status >= 200 && status < 300,
   status,
-  headers: { get: (name) => headers[name] ?? headers[name.toLowerCase()] ?? null },
-  arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+  headers: {
+    get: (name) => headers[name] ?? headers[name.toLowerCase()] ?? null,
+  },
+  arrayBuffer: async () =>
+    body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
 });
 
 /** Answers per gateway host, in the order the hosts are tried. */
@@ -39,7 +48,9 @@ function stubFetch(answers) {
     seen.push({ url, accept: options?.headers?.Accept ?? null });
     const key = Object.keys(answers).find((host) => url.includes(host));
     const next = answers[key];
-    return typeof next === "function" ? next(seen.filter((s) => s.url.includes(key)).length) : next;
+    return typeof next === "function"
+      ? next(seen.filter((s) => s.url.includes(key)).length)
+      : next;
   });
   return { fetchStub, seen };
 }
@@ -51,7 +62,10 @@ describe("a gateway that is gone, not busy", () => {
     const { fetchStub, seen } = stubFetch({
       "retired.example": answer({
         status: 429,
-        headers: { Sunset: "Mon, 21 Sep 2026 00:00:00 GMT", "Retry-After": "2" },
+        headers: {
+          Sunset: "Mon, 21 Sep 2026 00:00:00 GMT",
+          "Retry-After": "2",
+        },
       }),
       "alive.example": answer(),
     });
@@ -65,14 +79,18 @@ describe("a gateway that is gone, not busy", () => {
 
     expect(bytes).toEqual(BYTES);
     expect(waits).toEqual([]);
-    expect(seen.filter((s) => s.url.includes("retired.example"))).toHaveLength(1);
+    expect(seen.filter((s) => s.url.includes("retired.example"))).toHaveLength(
+      1,
+    );
   });
 
   test("a gateway that announces its retirement and still serves is still used", async () => {
     // How a sunset actually arrives: the header appears weeks before the
     // host stops answering. Refusing it early would break a working path.
     const { fetchStub } = stubFetch({
-      "leaving.example": answer({ headers: { Sunset: "Mon, 21 Sep 2026 00:00:00 GMT" } }),
+      "leaving.example": answer({
+        headers: { Sunset: "Mon, 21 Sep 2026 00:00:00 GMT" },
+      }),
     });
 
     const bytes = await fetchFromGateways(CID, {
@@ -85,7 +103,10 @@ describe("a gateway that is gone, not busy", () => {
 
   test("a Retry-After beyond the cap moves on rather than waiting it out", async () => {
     const { fetchStub } = stubFetch({
-      "closed.example": answer({ status: 429, headers: { "Retry-After": "900" } }),
+      "closed.example": answer({
+        status: 429,
+        headers: { "Retry-After": "900" },
+      }),
       "alive.example": answer(),
     });
     const waits = [];
@@ -103,7 +124,9 @@ describe("a gateway that is gone, not busy", () => {
   test("a short Retry-After is still honoured", async () => {
     const { fetchStub } = stubFetch({
       "busy.example": (attempt) =>
-        attempt === 1 ? answer({ status: 429, headers: { "Retry-After": "2" } }) : answer(),
+        attempt === 1
+          ? answer({ status: 429, headers: { "Retry-After": "2" } })
+          : answer(),
     });
     const waits = [];
 
@@ -123,7 +146,10 @@ describe("what it refuses to accept as an answer", () => {
   test("an error page served with a 200 does not count", async () => {
     const html = new TextEncoder().encode("<!DOCTYPE html><html>nope</html>");
     const { fetchStub } = stubFetch({
-      "liar.example": answer({ body: html, headers: { "content-type": "text/html" } }),
+      "liar.example": answer({
+        body: html,
+        headers: { "content-type": "text/html" },
+      }),
       "alive.example": answer(),
     });
 
@@ -136,10 +162,15 @@ describe("what it refuses to accept as an answer", () => {
   });
 
   test("every gateway failing says so, naming the CID", async () => {
-    const { fetchStub } = stubFetch({ "gone.example": answer({ status: 410 }) });
+    const { fetchStub } = stubFetch({
+      "gone.example": answer({ status: 410 }),
+    });
 
     await expect(
-      fetchFromGateways(CID, { gateways: ["https://gone.example/ipfs"], fetchImpl: fetchStub }),
+      fetchFromGateways(CID, {
+        gateways: ["https://gone.example/ipfs"],
+        fetchImpl: fetchStub,
+      }),
     ).rejects.toThrow(new RegExp(CID));
   });
 });
@@ -183,5 +214,40 @@ describe("the default list", () => {
 
   test("is not empty", () => {
     expect(DEFAULT_GATEWAYS.length).toBeGreaterThan(0);
+  });
+});
+
+describe("what came back is what was asked for", () => {
+  test("bytes that do not hash to a raw CID are refused, and the next gateway is asked", async () => {
+    const other = CIDClass.create(
+      1,
+      raw.code,
+      await sha256.digest(new Uint8Array([9, 9, 9])),
+    ).toString();
+    const calls = [];
+    const fetchImpl = async (url) => {
+      calls.push(String(url));
+      return answer();
+    };
+    await expect(
+      fetchFromGateways(other, {
+        gateways: ["https://a.example/ipfs", "https://b.example/ipfs"],
+        fetchImpl,
+        sleep: async () => {},
+      }),
+    ).rejects.toThrow();
+    expect(calls).toHaveLength(2);
+    expect(await matchesRawCid(other, BYTES)).toBe(false);
+    expect(await matchesRawCid(CID, BYTES)).toBe(true);
+  });
+
+  test("a CID the check cannot prove passes: dag-pb, dag-cbor, an unparsable string", async () => {
+    expect(
+      await matchesRawCid(
+        "QmXFP7bcUKHowZN2faFrEdiABN1E6raBiRsQbGCtb5Fnwn",
+        BYTES,
+      ),
+    ).toBe(true);
+    expect(await matchesRawCid("not a cid", BYTES)).toBe(true);
   });
 });

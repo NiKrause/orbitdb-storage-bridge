@@ -76,7 +76,9 @@ describe("a backend from a choice", () => {
  * worth asserting is the URL the driver actually asks.
  */
 describe("the gateway a read goes to", () => {
-  const CID = "bafkreibjw4ccgiflcijrenzjpiptwsvhrkugkfzryan4wplryxfc6xrlrm";
+  // A dag-pb CID: these tests are about which host is asked, and a raw CID
+  // would now be checked against the stub's bytes (gateway-fetch, 0.19.0).
+  const CID = "QmXFP7bcUKHowZN2faFrEdiABN1E6raBiRsQbGCtb5Fnwn";
   const realFetch = globalThis.fetch;
   let asked;
 

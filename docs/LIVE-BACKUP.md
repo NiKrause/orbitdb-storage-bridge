@@ -69,8 +69,13 @@ const live = createLiveBackup({
 await live.start();
 ```
 
-- `start()` ships, after `settle`, whatever was written before the watcher came — after a restart,
-  or before the archive was switched on — and nothing if there is nothing.
+- `start()` schedules one flush after `settle` when `after` or `every` is set, so whatever was
+  written before the watcher came — after a restart, or before the archive was switched on — goes
+  out; with neither trigger, call `flush()` yourself.
+- `settle` (the option, not the delay): `(kept, handle) => kept`, to follow a backend's answer
+  before the increment counts as shipped. Aleph says `pending` first and may reject later; a
+  settled `status: "rejected"` fails the flush and the state stays.
+- `close()` stops and detaches from every database; `status()` also reports `watched`.
 - `watch(database, collection?)` and `unwatch(database)` add and remove databases while running.
 - `flush()` ships what is pending now and resolves with what went out, or `null` when nothing was
   new. One flush at a time; a flush asked for during one runs after it.
@@ -102,6 +107,12 @@ await restoreFromIncrements(orbitdb, { base, increments, open: { encryption } })
 
 - `readIncrement(bytes)` checks every block against its CID and finds the manifest; it refuses a
   CAR that is not an increment, and one written in a format this build does not read.
+- `mergeIncrements` joins **every** source's heads (a stale head costs nothing; a branch only an
+  older increment saw is kept) and names `gaps` and `duplicates` in the sequence. A chain with
+  either is refused by `restoreFromIncrements` and `joinIncrements` unless `allowGaps: true`.
+- The sealed path refuses plaintext: `withEncryption` hands back only envelopes it can open
+  (`allowPlaintextReads` is off since 0.19.0), so a store or gateway cannot hand a sealed archive
+  a plaintext list of another database.
 - `base` is optional: what `bundleDatabases` or `openAppBackup` returned (`{ metadata | manifest,
   blocks }`). Increments are ordered by `sequence`; for each database the heads of the newest
   source that names it are joined. `mergeIncrements` does the folding alone, for a caller that
@@ -118,8 +129,11 @@ books that are open on screen: the blocks go into the log's storage and each hea
 instance the application already holds. Joining merges; the application reloads its view afterwards.
 
 ```js
-const { joined, heads } = await joinIncrements(todos, { increments });
+const { joined, heads } = await joinIncrements(todos, { increments, blockstore: orbitdb.ipfs.blockstore });
 ```
+
+`blockstore` is where the application's own (non-dag-cbor) blocks go; without it they are counted
+in `skippedRaw` and left out, since OrbitDB's log storage does not take them.
 
 ## What it costs on Aleph
 
@@ -139,7 +153,7 @@ full backup, or when an archive is given up, the account forgets them:
 import { createAlephForget, forgetAlephStores } from "@le-space/orbitdb-storage-bridge/backends/aleph-pin";
 
 const forget = createAlephForget({ sender: address, sign, channel: "SIMPLE-TODO-ARCHIVED01" });
-const { forgotten, kept, rejected } = await forgetAlephStores({
+const { forgotten, kept, rejected, pending, failed } = await forgetAlephStores({
   owner: address,
   channel: "SIMPLE-TODO-ARCHIVED01",
   forget,
@@ -148,8 +162,10 @@ const { forgotten, kept, rejected } = await forgetAlephStores({
 });
 ```
 
-A FORGET is the account's, not the blob's: the driver's `remove` stays unsupported, and a forgotten
-STORE cannot be brought back — the file has to be stored again. Pinata, Lighthouse and the in-process
+`forgotten` holds only what Aleph confirmed; `pending` what it had not decided in time (follow the
+FORGET's item hash with `waitForMessage`); `failed` a batch that could not be sent. A FORGET is the
+account's, not the blob's: the driver's `remove` stays unsupported, and a forgotten STORE cannot be
+brought back — the file has to be stored again. Pinata, Lighthouse and the in-process
 driver delete through their `remove`.
 
 ## What it does not do
