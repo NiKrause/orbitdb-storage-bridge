@@ -72,7 +72,7 @@ await live.start();
 - `start()` schedules one flush after `settle` when `after` or `every` is set, so whatever was
   written before the watcher came — after a restart, or before the archive was switched on — goes
   out; with neither trigger, call `flush()` yourself.
-- `settle` (the option, not the delay): `(kept, handle) => kept`, to follow a backend's answer
+- `confirm`: `(kept, handle) => kept`, to follow a backend's answer
   before the increment counts as shipped. Aleph says `pending` first and may reject later; a
   settled `status: "rejected"` fails the flush and the state stays.
 - `close()` stops and detaches from every database; `status()` also reports `watched`.
