@@ -26,6 +26,7 @@ import {
   readIncrement,
   mergeIncrements,
   restoreFromIncrements,
+  joinIncrements,
   INCREMENT_KIND,
   INCREMENT_VERSION,
 } from "../lib/live-backup.js";
@@ -499,6 +500,42 @@ describe("increments", () => {
     await live.flush();
     const [one] = await incrementsIn(backend, store);
     expect(has(one.blocks, fileCid.toString())).toBe(true);
+    await live.stop();
+  });
+
+  test("joinIncrements brings the entries into a database that stays open", async () => {
+    const store = new Map();
+    const backend = createMemoryBackend({ store });
+    const mine = await alice.orbitdb.open("live-join", {
+      type: "keyvalue",
+      ...open,
+    });
+    await mine.put("a", 1);
+    const live = createLiveBackup({ databases: [mine], backend });
+    await live.flush();
+    await mine.put("b", 2);
+    await mine.put("a", 3);
+    await live.flush();
+
+    // Dave opens the same address — offline, so the manifest has to be there
+    // first — and holds the instance on screen, as an application would.
+    for (const [name, { bytes }] of (await bundleDatabases([mine])).blocks) {
+      await dave.helia.blockstore.put(CID.parse(name), bytes);
+    }
+    const theirs = await dave.orbitdb.open(mine.address, {
+      type: "keyvalue",
+      ...open,
+    });
+    expect(await theirs.all()).toEqual([]);
+
+    const result = await joinIncrements(theirs, {
+      increments: await incrementsIn(backend, store),
+    });
+    expect(result).toMatchObject({ joined: 1, heads: 1 });
+    expect(await theirs.get("a")).toBe(3);
+    expect(await theirs.get("b")).toBe(2);
+    await expect(joinIncrements(mine, { increments: [] })).rejects.toThrow();
+    await theirs.close();
     await live.stop();
   });
 

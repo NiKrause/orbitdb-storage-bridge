@@ -107,6 +107,17 @@ await restoreFromIncrements(orbitdb, { base, increments, open: { encryption } })
   are missing — an increment skipped in the middle — is reported by `restoreFromBlocks` as a head
   that could not be joined.
 
+### Into a database that stays open
+
+`restoreFromIncrements` reopens the database, as `restoreFromBlocks` does, and an application holding
+the old instance is left with a closed one. `joinIncrements(database, { base, increments })` is for
+books that are open on screen: the blocks go into the log's storage and each head is joined on the
+instance the application already holds. Joining merges; the application reloads its view afterwards.
+
+```js
+const { joined, heads } = await joinIncrements(todos, { increments });
+```
+
 ## What it costs on Aleph
 
 One upload and one STORE per increment, paid in credits for the file's size (about 54 credits per
