@@ -130,6 +130,28 @@ each one needs its own FORGET when a later full backup makes it redundant. `afte
 decide how many increments a day becomes; a full backup now and then, followed by `rebase`, is what
 keeps the chain short.
 
+## Deleting an archive on Aleph
+
+Increments never go away by themselves: each is a STORE the account pays for by the hour. After a
+full backup, or when an archive is given up, the account forgets them:
+
+```js
+import { createAlephForget, forgetAlephStores } from "@le-space/orbitdb-storage-bridge/backends/aleph-pin";
+
+const forget = createAlephForget({ sender: address, sign, channel: "SIMPLE-TODO-ARCHIVED01" });
+const { forgotten, kept, rejected } = await forgetAlephStores({
+  owner: address,
+  channel: "SIMPLE-TODO-ARCHIVED01",
+  forget,
+  keep: (store) => store.cid === newestFullBackup, // optional
+  reason: "archive deleted by its owner",
+});
+```
+
+A FORGET is the account's, not the blob's: the driver's `remove` stays unsupported, and a forgotten
+STORE cannot be brought back — the file has to be stored again. Pinata, Lighthouse and the in-process
+driver delete through their `remove`.
+
 ## What it does not do
 
 - It does not write through: no local write waits for a service. That is the point.

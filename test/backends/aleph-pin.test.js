@@ -21,6 +21,9 @@ import {
   createAlephAuthorizer,
   waitForMessage,
   listAlephStores,
+  buildForgetMessage,
+  createAlephForget,
+  forgetAlephStores,
   DEFAULT_ALEPH_CHANNEL,
   STORE_PAYMENTS,
 } from "../../lib/backends/aleph-pin.js";
@@ -34,7 +37,9 @@ const CID = "QmXFP7bcUKHowZN2faFrEdiABN1E6raBiRsQbGCtb5Fnwn";
 const SIGNATURE = "0x" + "ab".repeat(65);
 
 /** A fetch that records what it was asked to do and answers like Aleph. */
-function recordingFetch(response = { status: 202, body: { message_status: "pending" } }) {
+function recordingFetch(
+  response = { status: 202, body: { message_status: "pending" } },
+) {
   const calls = [];
   const fetchImpl = async (url, init) => {
     calls.push({ url, init, body: JSON.parse(init.body) });
@@ -51,7 +56,11 @@ function recordingFetch(response = { status: 202, body: { message_status: "pendi
 
 describe("the STORE message", () => {
   test("is the envelope relay-button already posts, with a different type", async () => {
-    const message = await buildStoreMessage({ sender: ADDRESS, cid: CID, now: 1_757_000_000 });
+    const message = await buildStoreMessage({
+      sender: ADDRESS,
+      cid: CID,
+      now: 1_757_000_000,
+    });
 
     expect(message.chain).toBe("ETH");
     expect(message.type).toBe("STORE");
@@ -60,12 +69,18 @@ describe("the STORE message", () => {
 
     // The hash is over the serialised content, and it is hex sha-256. Checked
     // against node's own implementation rather than against itself.
-    const expected = createHash("sha256").update(message.item_content).digest("hex");
+    const expected = createHash("sha256")
+      .update(message.item_content)
+      .digest("hex");
     expect(message.item_hash).toBe(expected);
   });
 
   test("names the CID in the content, where the meaning of the fields flips", async () => {
-    const message = await buildStoreMessage({ sender: ADDRESS, cid: CID, now: 1 });
+    const message = await buildStoreMessage({
+      sender: ADDRESS,
+      cid: CID,
+      now: 1,
+    });
     const content = JSON.parse(message.item_content);
 
     expect(content.address).toBe(ADDRESS);
@@ -78,7 +93,11 @@ describe("the STORE message", () => {
   });
 
   test("what the wallet puts its name to is four fields, in order", async () => {
-    const message = await buildStoreMessage({ sender: ADDRESS, cid: CID, now: 1 });
+    const message = await buildStoreMessage({
+      sender: ADDRESS,
+      cid: CID,
+      now: 1,
+    });
     expect(signaturePayload(message)).toBe(
       ["ETH", ADDRESS, "STORE", message.item_hash].join("\n"),
     );
@@ -88,18 +107,41 @@ describe("the STORE message", () => {
     // Without `payment` Aleph books a STORE as `hold` — locked ALEPH, which a
     // credit-funded account does not have (measured 2026-10-03). `credit` is
     // what Aleph's own CLI sends by default.
-    const paid = JSON.parse((await buildStoreMessage({ sender: ADDRESS, cid: CID, now: 1 })).item_content);
+    const paid = JSON.parse(
+      (await buildStoreMessage({ sender: ADDRESS, cid: CID, now: 1 }))
+        .item_content,
+    );
     expect(paid.payment).toEqual({ type: "credit" });
 
-    const held = JSON.parse((await buildStoreMessage({ sender: ADDRESS, cid: CID, payment: "hold", now: 1 })).item_content);
+    const held = JSON.parse(
+      (
+        await buildStoreMessage({
+          sender: ADDRESS,
+          cid: CID,
+          payment: "hold",
+          now: 1,
+        })
+      ).item_content,
+    );
     expect(held.payment).toEqual({ type: "hold" });
 
     // `null` sends what every version up to 0.16.1 sent: no payment at all.
-    const bare = JSON.parse((await buildStoreMessage({ sender: ADDRESS, cid: CID, payment: null, now: 1 })).item_content);
+    const bare = JSON.parse(
+      (
+        await buildStoreMessage({
+          sender: ADDRESS,
+          cid: CID,
+          payment: null,
+          now: 1,
+        })
+      ).item_content,
+    );
     expect(bare).not.toHaveProperty("payment");
 
     expect(STORE_PAYMENTS).toEqual(["credit", "hold"]);
-    await expect(buildStoreMessage({ sender: ADDRESS, cid: CID, payment: "stream" })).rejects.toThrow(/credit.*hold/);
+    await expect(
+      buildStoreMessage({ sender: ADDRESS, cid: CID, payment: "stream" }),
+    ).rejects.toThrow(/credit.*hold/);
   });
 });
 
@@ -144,12 +186,25 @@ describe("pinning", () => {
 
   test("the posted STORE is paid in credits, or as the caller says", async () => {
     const credit = recordingFetch();
-    await createAlephPin({ sender: ADDRESS, sign: async () => SIGNATURE, fetch: credit })(CID);
-    expect(JSON.parse(credit.calls[0].body.message.item_content).payment).toEqual({ type: "credit" });
+    await createAlephPin({
+      sender: ADDRESS,
+      sign: async () => SIGNATURE,
+      fetch: credit,
+    })(CID);
+    expect(
+      JSON.parse(credit.calls[0].body.message.item_content).payment,
+    ).toEqual({ type: "credit" });
 
     const none = recordingFetch();
-    await createAlephPin({ sender: ADDRESS, sign: async () => SIGNATURE, fetch: none, payment: null })(CID);
-    expect(JSON.parse(none.calls[0].body.message.item_content)).not.toHaveProperty("payment");
+    await createAlephPin({
+      sender: ADDRESS,
+      sign: async () => SIGNATURE,
+      fetch: none,
+      payment: null,
+    })(CID);
+    expect(
+      JSON.parse(none.calls[0].body.message.item_content),
+    ).not.toHaveProperty("payment");
   });
 
   test("a bare signature is 0x-prefixed, because Aleph wants one", async () => {
@@ -167,7 +222,10 @@ describe("pinning", () => {
     const pin = createAlephPin({
       sender: ADDRESS,
       sign: async () => SIGNATURE,
-      fetch: recordingFetch({ status: 202, body: { message_status: "pending" } }),
+      fetch: recordingFetch({
+        status: 202,
+        body: { message_status: "pending" },
+      }),
     });
 
     // Aleph takes the message before it checks the signature or the balance.
@@ -179,13 +237,18 @@ describe("pinning", () => {
     const pin = createAlephPin({
       sender: ADDRESS,
       sign: async () => SIGNATURE,
-      fetch: recordingFetch({ status: 422, body: { details: "InvalidMessageFormat" } }),
+      fetch: recordingFetch({
+        status: 422,
+        body: { details: "InvalidMessageFormat" },
+      }),
     });
     await expect(pin(CID)).rejects.toThrow(/refused the STORE message: 422/);
   });
 
   test("it refuses to be built without the things it cannot work without", () => {
-    expect(() => createAlephPin({ sign: async () => "" })).toThrow(BackendError);
+    expect(() => createAlephPin({ sign: async () => "" })).toThrow(
+      BackendError,
+    );
     expect(() => createAlephPin({ sender: ADDRESS })).toThrow(/sign/);
   });
 });
@@ -193,7 +256,11 @@ describe("pinning", () => {
 describe("wired into the backend", () => {
   test("supplying pin is what declares pinByCid — and omitting it is honest", async () => {
     const withWallet = createAlephBackend({
-      pin: createAlephPin({ sender: ADDRESS, sign: async () => SIGNATURE, fetch: recordingFetch() }),
+      pin: createAlephPin({
+        sender: ADDRESS,
+        sign: async () => SIGNATURE,
+        fetch: recordingFetch(),
+      }),
     });
     expect(withWallet.capabilities.pinByCid).toBe(true);
     expect(typeof withWallet.pinCid).toBe("function");
@@ -208,7 +275,10 @@ describe("wired into the backend", () => {
       pin: createAlephPin({
         sender: ADDRESS,
         sign: async () => SIGNATURE,
-        fetch: recordingFetch({ status: 200, body: { message_status: "processed" } }),
+        fetch: recordingFetch({
+          status: 200,
+          body: { message_status: "processed" },
+        }),
       }),
     });
 
@@ -223,7 +293,11 @@ describe("wired into the backend", () => {
 
   test("a pending STORE is not reported as kept, and carries what to follow it by", async () => {
     const backend = createAlephBackend({
-      pin: createAlephPin({ sender: ADDRESS, sign: async () => SIGNATURE, fetch: recordingFetch() }),
+      pin: createAlephPin({
+        sender: ADDRESS,
+        sign: async () => SIGNATURE,
+        fetch: recordingFetch(),
+      }),
     });
     const handle = await backend.pinCid(CID);
     expect(handle.retained).toBe(false);
@@ -244,12 +318,24 @@ describe("wired into the backend", () => {
     const ingest = async (url, init) => {
       expect(url).toBe("https://ipfs.aleph.cloud/api/v0/add");
       expect(init.method).toBe("POST");
-      return { ok: true, status: 200, text: async () => JSON.stringify({ Name: "blob", Hash: CID, Size: "3" }) };
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({ Name: "blob", Hash: CID, Size: "3" }),
+      };
     };
-    const withPin = createAlephBackend({ fetch: ingest, pin: async () => ({ itemHash: "x", status: "processed" }) });
-    expect((await withPin.putBlob(new Uint8Array([1, 2, 3]))).retained).toBe(false);
+    const withPin = createAlephBackend({
+      fetch: ingest,
+      pin: async () => ({ itemHash: "x", status: "processed" }),
+    });
+    expect((await withPin.putBlob(new Uint8Array([1, 2, 3]))).retained).toBe(
+      false,
+    );
     const without = createAlephBackend({ fetch: ingest });
-    expect((await without.putBlob(new Uint8Array([1, 2, 3]))).retained).toBe(false);
+    expect((await without.putBlob(new Uint8Array([1, 2, 3]))).retained).toBe(
+      false,
+    );
   });
 });
 
@@ -282,16 +368,33 @@ describe("following a STORE", () => {
       { status: 200, body: { status: "pending" } },
       { status: 200, body: { status: "processed" } },
     ]);
-    const result = await waitForMessage(HASH, { fetch: fetchImpl, sleep: noWait });
+    const result = await waitForMessage(HASH, {
+      fetch: fetchImpl,
+      sleep: noWait,
+    });
     expect(result).toEqual({ itemHash: HASH, status: "processed" });
-    expect(fetchImpl.urls).toEqual(Array(3).fill(`https://api2.aleph.im/api/v0/messages/${HASH}`));
+    expect(fetchImpl.urls).toEqual(
+      Array(3).fill(`https://api2.aleph.im/api/v0/messages/${HASH}`),
+    );
   });
 
   test("a rejection says why — for credit, how much was there and how much is needed", async () => {
     // The answer as Aleph gave it on 2026-10-03 for 2 MiB on an account with no credit.
-    const details = { errors: [{ account_credits: "0", min_runtime_days: 1, required_credits: "107.804934183756585600" }] };
-    const fetchImpl = answeringFetch([{ status: 200, body: { status: "rejected", error_code: 6, details } }]);
-    await expect(waitForMessage(HASH, { fetch: fetchImpl, sleep: noWait })).resolves.toEqual({
+    const details = {
+      errors: [
+        {
+          account_credits: "0",
+          min_runtime_days: 1,
+          required_credits: "107.804934183756585600",
+        },
+      ],
+    };
+    const fetchImpl = answeringFetch([
+      { status: 200, body: { status: "rejected", error_code: 6, details } },
+    ]);
+    await expect(
+      waitForMessage(HASH, { fetch: fetchImpl, sleep: noWait }),
+    ).resolves.toEqual({
       itemHash: HASH,
       status: "rejected",
       errorCode: 6,
@@ -301,21 +404,30 @@ describe("following a STORE", () => {
 
   test("still pending when the time is up is reported as that, not thrown", async () => {
     const slept = [];
-    const fetchImpl = answeringFetch([new Error("socket hang up"), { status: 200, body: { status: "pending" } }]);
+    const fetchImpl = answeringFetch([
+      new Error("socket hang up"),
+      { status: 200, body: { status: "pending" } },
+    ]);
     const result = await waitForMessage(HASH, {
       fetch: fetchImpl,
       timeout: 6_000,
       interval: 2_000,
       sleep: async (ms) => slept.push(ms),
     });
-    expect(result).toEqual({ itemHash: HASH, status: "pending", timedOut: true });
+    expect(result).toEqual({
+      itemHash: HASH,
+      status: "pending",
+      timedOut: true,
+    });
     // Asked at once, then every interval until the timeout: 0, 2, 4, 6 seconds.
     expect(fetchImpl.urls).toHaveLength(4);
     expect(slept).toEqual([2_000, 2_000, 2_000]);
   });
 
   test("it needs the item hash", async () => {
-    await expect(waitForMessage("", { fetch: answeringFetch([]) })).rejects.toThrow(/item hash/);
+    await expect(
+      waitForMessage("", { fetch: answeringFetch([]) }),
+    ).rejects.toThrow(/item hash/);
   });
 });
 
@@ -326,7 +438,13 @@ describe("listing what an account keeps", () => {
     item_hash: itemHash,
     sender: DELEGATE,
     channel: "SOME-BACKUP",
-    content: { address: OWNER, item_type: "ipfs", item_hash: cid, payment: { type: "credit" }, time },
+    content: {
+      address: OWNER,
+      item_type: "ipfs",
+      item_hash: cid,
+      payment: { type: "credit" },
+      time,
+    },
     ...extra,
   });
 
@@ -340,10 +458,16 @@ describe("listing what an account keeps", () => {
         },
       },
     ]);
-    const { stores, total } = await listAlephStores({ owner: OWNER, channel: "SOME-BACKUP", fetch: fetchImpl });
+    const { stores, total } = await listAlephStores({
+      owner: OWNER,
+      channel: "SOME-BACKUP",
+      fetch: fetchImpl,
+    });
 
     const url = new URL(fetchImpl.urls[0]);
-    expect(url.origin + url.pathname).toBe("https://api2.aleph.im/api/v0/messages.json");
+    expect(url.origin + url.pathname).toBe(
+      "https://api2.aleph.im/api/v0/messages.json",
+    );
     // `addresses` matches the sender and misses a delegate's STORE (measured
     // 2026-10-03); `owners` matches the account the STORE is for.
     expect(url.searchParams.get("owners")).toBe(OWNER);
@@ -353,19 +477,50 @@ describe("listing what an account keeps", () => {
 
     expect(total).toBe(2);
     expect(stores).toEqual([
-      { cid: "Qm2", itemHash: "h2", sender: DELEGATE, owner: OWNER, time: 200, channel: "SOME-BACKUP", payment: "credit" },
-      { cid: "Qm1", itemHash: "h1", sender: DELEGATE, owner: OWNER, time: 100, channel: "SOME-BACKUP", payment: "credit" },
+      {
+        cid: "Qm2",
+        itemHash: "h2",
+        sender: DELEGATE,
+        owner: OWNER,
+        time: 200,
+        channel: "SOME-BACKUP",
+        payment: "credit",
+      },
+      {
+        cid: "Qm1",
+        itemHash: "h1",
+        sender: DELEGATE,
+        owner: OWNER,
+        time: 100,
+        channel: "SOME-BACKUP",
+        payment: "credit",
+      },
     ]);
   });
 
   test("keeps only this owner's STOREs, and only those that name something", async () => {
     const foreign = store("h3", "Qm3", 300);
-    foreign.content = { ...foreign.content, address: "0x1111111111111111111111111111111111111111" };
+    foreign.content = {
+      ...foreign.content,
+      address: "0x1111111111111111111111111111111111111111",
+    };
     const empty = store("h4", "", 400);
     const fetchImpl = answeringFetch([
-      { status: 200, body: { messages: [store("h1", "Qm1", 100, { sender: OWNER }), foreign, empty] } },
+      {
+        status: 200,
+        body: {
+          messages: [
+            store("h1", "Qm1", 100, { sender: OWNER }),
+            foreign,
+            empty,
+          ],
+        },
+      },
     ]);
-    const { stores, total } = await listAlephStores({ owner: OWNER.toLowerCase(), fetch: fetchImpl });
+    const { stores, total } = await listAlephStores({
+      owner: OWNER.toLowerCase(),
+      fetch: fetchImpl,
+    });
     expect(stores.map((s) => s.itemHash)).toEqual(["h1"]);
     expect(total).toBeNull();
     expect(new URL(fetchImpl.urls[0]).searchParams.has("channels")).toBe(false);
@@ -373,9 +528,14 @@ describe("listing what an account keeps", () => {
 
   test("a refusal is an error, and the owner is required", async () => {
     await expect(
-      listAlephStores({ owner: OWNER, fetch: answeringFetch([{ status: 503, body: {} }]) }),
+      listAlephStores({
+        owner: OWNER,
+        fetch: answeringFetch([{ status: 503, body: {} }]),
+      }),
     ).rejects.toThrow(/did not list the STORE messages: 503/);
-    await expect(listAlephStores({ fetch: answeringFetch([]) })).rejects.toThrow(/owner/);
+    await expect(
+      listAlephStores({ fetch: answeringFetch([]) }),
+    ).rejects.toThrow(/owner/);
   });
 });
 
@@ -389,7 +549,10 @@ describe("signing for another account", () => {
     const pin = createAlephPin({
       sender: DELEGATE,
       owner: OWNER,
-      sign: async (address, payload) => (seen.push([address, payload]), SIGNATURE),
+      sign: async (address, payload) => (
+        seen.push([address, payload]),
+        SIGNATURE
+      ),
       fetch: fetchImpl,
     });
     await pin(CID);
@@ -403,24 +566,50 @@ describe("signing for another account", () => {
   });
 
   test("without an owner nothing changes: the content names the sender", async () => {
-    const message = await buildStoreMessage({ sender: DELEGATE, cid: CID, now: 1 });
+    const message = await buildStoreMessage({
+      sender: DELEGATE,
+      cid: CID,
+      now: 1,
+    });
     expect(JSON.parse(message.item_content).address).toBe(DELEGATE);
   });
 
   test("the grant is the owner's AGGREGATE on the security channel, the whole list in it", async () => {
-    const authorizations = [{ address: DELEGATE, types: ["STORE"], channels: ["BELEGE-BACKUP"], chain: "ETH" }];
-    const message = await buildAuthorizationMessage({ owner: OWNER, authorizations, now: 7 });
-    expect(message).toMatchObject({ sender: OWNER, chain: "ETH", type: "AGGREGATE", channel: "security", item_type: "inline" });
+    const authorizations = [
+      {
+        address: DELEGATE,
+        types: ["STORE"],
+        channels: ["BELEGE-BACKUP"],
+        chain: "ETH",
+      },
+    ];
+    const message = await buildAuthorizationMessage({
+      owner: OWNER,
+      authorizations,
+      now: 7,
+    });
+    expect(message).toMatchObject({
+      sender: OWNER,
+      chain: "ETH",
+      type: "AGGREGATE",
+      channel: "security",
+      item_type: "inline",
+    });
     expect(JSON.parse(message.item_content)).toEqual({
       address: OWNER,
       key: "security",
       content: { authorizations },
       time: 7,
     });
-    expect(message.item_hash).toBe(createHash("sha256").update(message.item_content).digest("hex"));
-    await expect(buildAuthorizationMessage({ owner: OWNER, authorizations: [{ types: ["STORE"] }] })).rejects.toThrow(
-      /delegate's address/,
+    expect(message.item_hash).toBe(
+      createHash("sha256").update(message.item_content).digest("hex"),
     );
+    await expect(
+      buildAuthorizationMessage({
+        owner: OWNER,
+        authorizations: [{ types: ["STORE"] }],
+      }),
+    ).rejects.toThrow(/delegate's address/);
   });
 
   /** A fetch that answers the owner's security aggregate, and records posts. */
@@ -428,24 +617,46 @@ describe("signing for another account", () => {
     const posts = [];
     const fetchImpl = async (url, init) => {
       if (!init) {
-        expect(url).toBe(`https://api2.aleph.im/api/v0/aggregates/${OWNER}.json?keys=security`);
-        if (!existing) return { ok: false, status: 404, json: async () => ({}), text: async () => "No aggregate found" };
+        expect(url).toBe(
+          `https://api2.aleph.im/api/v0/aggregates/${OWNER}.json?keys=security`,
+        );
+        if (!existing)
+          return {
+            ok: false,
+            status: 404,
+            json: async () => ({}),
+            text: async () => "No aggregate found",
+          };
         return {
           ok: true,
           status: 200,
-          json: async () => ({ address: OWNER, data: { security: { authorizations: existing } } }),
+          json: async () => ({
+            address: OWNER,
+            data: { security: { authorizations: existing } },
+          }),
         };
       }
       posts.push(JSON.parse(init.body).message);
-      return { ok: true, status: 200, json: async () => ({ message_status: "processed" }), text: async () => "" };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ message_status: "processed" }),
+        text: async () => "",
+      };
     };
     fetchImpl.posts = posts;
     return fetchImpl;
   }
 
   test("authorize keeps the other grants and replaces one for the same address; revoke takes one away", async () => {
-    const other = { address: "0x1111111111111111111111111111111111111111", types: ["POST"] };
-    const old = { address: DELEGATE.toUpperCase().replace("0X", "0x"), types: ["STORE"] };
+    const other = {
+      address: "0x1111111111111111111111111111111111111111",
+      types: ["POST"],
+    };
+    const old = {
+      address: DELEGATE.toUpperCase().replace("0X", "0x"),
+      types: ["STORE"],
+    };
     const fetchImpl = aggregateFetch([other, old]);
     const signed = [];
     const authorizer = createAlephAuthorizer({
@@ -454,30 +665,164 @@ describe("signing for another account", () => {
       fetch: fetchImpl,
     });
 
-    const granted = await authorizer.authorize({ address: DELEGATE, types: ["STORE"], channels: ["BELEGE-BACKUP"] });
+    const granted = await authorizer.authorize({
+      address: DELEGATE,
+      types: ["STORE"],
+      channels: ["BELEGE-BACKUP"],
+    });
     expect(granted.status).toBe("processed");
-    expect(JSON.parse(fetchImpl.posts[0].item_content).content.authorizations).toEqual([
+    expect(
+      JSON.parse(fetchImpl.posts[0].item_content).content.authorizations,
+    ).toEqual([
       other,
       { address: DELEGATE, types: ["STORE"], channels: ["BELEGE-BACKUP"] },
     ]);
     expect(signed).toEqual([OWNER]);
 
     await authorizer.revoke(DELEGATE);
-    expect(JSON.parse(fetchImpl.posts[1].item_content).content.authorizations).toEqual([other]);
+    expect(
+      JSON.parse(fetchImpl.posts[1].item_content).content.authorizations,
+    ).toEqual([other]);
   });
 
   test("an owner with no permissions yet reads as none, and the first grant is the whole list", async () => {
     const fetchImpl = aggregateFetch(null);
-    const authorizer = createAlephAuthorizer({ owner: OWNER, sign: async () => SIGNATURE, fetch: fetchImpl });
+    const authorizer = createAlephAuthorizer({
+      owner: OWNER,
+      sign: async () => SIGNATURE,
+      fetch: fetchImpl,
+    });
     expect(await authorizer.read()).toEqual([]);
     await authorizer.authorize({ address: DELEGATE, types: ["STORE"] });
-    expect(JSON.parse(fetchImpl.posts[0].item_content).content.authorizations).toEqual([
-      { address: DELEGATE, types: ["STORE"] },
-    ]);
+    expect(
+      JSON.parse(fetchImpl.posts[0].item_content).content.authorizations,
+    ).toEqual([{ address: DELEGATE, types: ["STORE"] }]);
   });
 
   test("it refuses to be built without the owner or a signer", () => {
-    expect(() => createAlephAuthorizer({ sign: async () => SIGNATURE })).toThrow(/owner/);
+    expect(() =>
+      createAlephAuthorizer({ sign: async () => SIGNATURE }),
+    ).toThrow(/owner/);
     expect(() => createAlephAuthorizer({ owner: OWNER })).toThrow(/sign/);
+  });
+});
+
+describe("the FORGET message", () => {
+  const HASH =
+    "11c2a3bcace31a97e2793f5875d5835541bca3f8cc2ea66555f8c8b0258e9e85";
+
+  test("names the STOREs by item hash, for the owner, and is signed like a STORE", async () => {
+    const message = await buildForgetMessage({
+      sender: ADDRESS,
+      hashes: [HASH],
+      reason: "a new full backup",
+      now: 1_757_000_000,
+    });
+    expect(message.type).toBe("FORGET");
+    expect(message.item_type).toBe("inline");
+    const content = JSON.parse(message.item_content);
+    expect(content).toEqual({
+      address: ADDRESS,
+      time: 1_757_000_000,
+      hashes: [HASH],
+      reason: "a new full backup",
+    });
+    expect(message.item_hash).toBe(
+      createHash("sha256").update(message.item_content).digest("hex"),
+    );
+    expect(signaturePayload(message)).toBe(
+      ["ETH", ADDRESS, "FORGET", message.item_hash].join("\n"),
+    );
+  });
+
+  test("a delegate forgets for the owner", async () => {
+    const owner = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd";
+    const message = await buildForgetMessage({
+      sender: ADDRESS,
+      owner,
+      hashes: [HASH],
+    });
+    expect(JSON.parse(message.item_content).address).toBe(owner);
+    expect(message.sender).toBe(ADDRESS);
+  });
+
+  test("refuses to forget nothing", async () => {
+    await expect(
+      buildForgetMessage({ sender: ADDRESS, hashes: [] }),
+    ).rejects.toThrow(BackendError);
+  });
+
+  test("createAlephForget posts the signed message and reports what Aleph answered", async () => {
+    const fetchImpl = recordingFetch({
+      status: 200,
+      body: { message_status: "processed" },
+    });
+    const seen = [];
+    const forget = createAlephForget({
+      sender: ADDRESS,
+      sign: async (address, payload) => {
+        seen.push({ address, payload });
+        return SIGNATURE;
+      },
+      channel: "SIMPLE-TODO-ARCHIVED01",
+      fetch: fetchImpl,
+    });
+    const result = await forget([HASH], "the archive is deleted");
+    expect(result.status).toBe("processed");
+    expect(seen).toHaveLength(1);
+    expect(seen[0].address).toBe(ADDRESS);
+    const { message } = fetchImpl.calls[0].body;
+    expect(message.type).toBe("FORGET");
+    expect(message.channel).toBe("SIMPLE-TODO-ARCHIVED01");
+    expect(message.signature).toBe(SIGNATURE);
+    expect(JSON.parse(message.item_content).hashes).toEqual([HASH]);
+  });
+
+  test("forgetAlephStores lists an account's STOREs, keeps what it is told to, forgets the rest in batches", async () => {
+    const stores = [1, 2, 3].map((n) => ({
+      item_hash: `hash${n}`,
+      sender: ADDRESS,
+      channel: "SIMPLE-TODO-ARCHIVED01",
+      content: {
+        address: ADDRESS,
+        item_hash: `cid${n}`,
+        time: 1_757_000_000 + n,
+      },
+    }));
+    const calls = [];
+    const fetchImpl = async (url, init) => {
+      calls.push({ url: String(url), init });
+      if (String(url).includes("/messages.json")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ messages: stores, pagination_total: 3 }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ message_status: "processed" }),
+        text: async () => "",
+      };
+    };
+    const forgotten = [];
+    const forget = async (hashes) => {
+      forgotten.push(hashes);
+      return { itemHash: "f", status: "processed" };
+    };
+    const result = await forgetAlephStores({
+      owner: ADDRESS,
+      channel: "SIMPLE-TODO-ARCHIVED01",
+      forget,
+      keep: (store) => store.cid === "cid3",
+      batch: 2,
+      fetch: fetchImpl,
+    });
+    expect(result.kept).toEqual(["hash3"]);
+    expect(result.forgotten.sort()).toEqual(["hash1", "hash2"]);
+    expect(result.rejected).toEqual([]);
+    // Newest first, as the listing hands them over; one batch for two.
+    expect(forgotten).toEqual([["hash2", "hash1"]]);
   });
 });
