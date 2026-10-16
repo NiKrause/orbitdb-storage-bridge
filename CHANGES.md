@@ -27,10 +27,10 @@
     names it. `rebase({ base })` after a full backup starts the count again.
   - `joinIncrements(database, …)` does the same into a database that is open *now*, without
     closing it: for an application whose books are on screen.
-  - Thirteen tests on real OrbitDB nodes, offline: first and second increment, restore from the
+  - Fourteen tests on real OrbitDB nodes, offline: first and second increment, restore from the
     chain alone and from base plus increments, an outage, a replicated entry from another writer,
     `after`/`every` triggers, a restart from persisted state, databases watched later, a backend
-    that must be asked to keep, sealing, the application's own blocks, and a join into an open database.
+    that must be asked to keep, sealing, the application's own blocks, a join into an open database, and the backlog a start ships.
     [docs/LIVE-BACKUP.md](docs/LIVE-BACKUP.md) covers the whole path.
 
 ## 0.17.0 (2026-10-04)

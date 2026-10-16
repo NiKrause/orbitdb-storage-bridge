@@ -69,6 +69,8 @@ const live = createLiveBackup({
 await live.start();
 ```
 
+- `start()` ships, after `settle`, whatever was written before the watcher came — after a restart,
+  or before the archive was switched on — and nothing if there is nothing.
 - `watch(database, collection?)` and `unwatch(database)` add and remove databases while running.
 - `flush()` ships what is pending now and resolves with what went out, or `null` when nothing was
   new. One flush at a time; a flush asked for during one runs after it.

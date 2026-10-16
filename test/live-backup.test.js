@@ -323,6 +323,27 @@ describe("increments", () => {
     await live.stop();
   });
 
+  test("starting ships what was written before the watcher came", async () => {
+    const store = new Map();
+    const backend = createMemoryBackend({ store });
+    const db = await alice.orbitdb.open("live-backlog", {
+      type: "events",
+      ...open,
+    });
+    await db.add("before the watcher");
+    const live = createLiveBackup({
+      databases: [db],
+      backend,
+      after: 10,
+      settle: 50,
+    });
+    await live.start();
+    await sleep(400);
+    expect(store.size).toBe(1);
+    expect(live.status().sequence).toBe(1);
+    await live.stop();
+  });
+
   test("after enough updates it flushes by itself, and a burst becomes one increment", async () => {
     const store = new Map();
     const backend = createMemoryBackend({ store });
