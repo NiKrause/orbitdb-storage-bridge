@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased
+## 0.18.0 (2026-10-16)
 
 ### Added
 - **Increments between two full backups** (new export `./live-backup`, #144). `createLiveBackup`
