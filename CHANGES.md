@@ -1,12 +1,27 @@
 # Changes
 
+## Unreleased
+
+### Added
+
+- **A `ref` on Aleph STOREs** (`buildStoreMessage({ ref })`, `createAlephPin({ ref })`, and
+  `meta.ref` on one call): Aleph's free-text label on a STORE, which the messages API filters by.
+  `listAlephStores({ ref })` asks with `refs=` and keeps only STOREs carrying it; `forgetAlephStores({
+ref })` forgets one chain and no other. An application can now keep several chains on one account
+  and channel — the increments of one database, one per device — and list one of them without
+  downloading anything. What the label discloses is the caller's choice; a derived fingerprint rather
+  than an address keeps the store from learning which database it is.
+- `restoreFromIncrements` and `joinIncrements` return `gaps` and `duplicates` (sequence numbers), so
+  a caller that joined with `allowGaps` can say what the chain looked like instead of guessing.
+
 ## 0.20.0 (2026-10-17)
 
 ### Changed, and worth reading before upgrading
+
 - **A sealed restore refuses plaintext.** `withEncryption` and `decryptingFetch` default
   `allowPlaintextReads` to `false`: a caller that brings a key expects ciphertext, and whoever
   answers the fetch — gateway, service, network — could otherwise hand it a plaintext backup of
-  *another* database, which it would open and join (found in the 2026-10-16 audit). A backup
+  _another_ database, which it would open and join (found in the 2026-10-16 audit). A backup
   written before encryption is read with `allowPlaintextReads: true`, for that one restore, and
   the acceptance is logged; `hydrate()` takes it as `restore.allowPlaintextReads`.
 - **A gateway's answer to a raw sha-256 CID is hashed** (`fetchFromGateways`, `matchesRawCid`):
@@ -26,6 +41,7 @@
   is refused with a reason instead of silently restarting the numbering at 1.
 
 ### Added
+
 - **`joinIncrements(database, { blockstore })`**: the application's own (non-dag-cbor) blocks
   go into the blockstore the caller names, e.g. `orbitdb.ipfs.blockstore`; without it they are
   counted in `skippedRaw` and left out. OrbitDB's log storage refused their base32 names, so
@@ -46,6 +62,7 @@
 ## 0.19.0 (2026-10-17)
 
 ### Added
+
 - **Forgetting on Aleph** (`backends/aleph-pin`): `buildForgetMessage`, `createAlephForget` and
   `forgetAlephStores`. A FORGET signed by the STOREs' owner (or a delegate authorized for it)
   names them by item hash; the files they kept are unpinned and stop costing credits. The
@@ -59,6 +76,7 @@
 ## 0.18.0 (2026-10-16)
 
 ### Added
+
 - **Increments between two full backups** (new export `./live-backup`, #144). `createLiveBackup`
   watches open databases and ships what was written since the last increment as one small CAR —
   soon after the write, with nobody clicking and no other peer online. A full backup stays the
@@ -81,7 +99,7 @@
   - `readIncrement`, `mergeIncrements` and `restoreFromIncrements` put a base and its increments
     back through `restoreFromBlocks`, each database joined at the heads of the newest source that
     names it. `rebase({ base })` after a full backup starts the count again.
-  - `joinIncrements(database, …)` does the same into a database that is open *now*, without
+  - `joinIncrements(database, …)` does the same into a database that is open _now_, without
     closing it: for an application whose books are on screen.
   - Fourteen tests on real OrbitDB nodes, offline: first and second increment, restore from the
     chain alone and from base plus increments, an outage, a replicated entry from another writer,
@@ -92,6 +110,7 @@
 ## 0.17.0 (2026-10-04)
 
 ### Changed
+
 - **A STORE is paid in credits** (`backends/aleph-pin`). `buildStoreMessage` and `createAlephPin`
   put `payment: { type: "credit" }` into the STORE, as Aleph's own CLI does by default.
   - Without the field Aleph books a STORE as `hold`: ALEPH tokens locked on the account, a model
@@ -112,6 +131,7 @@
   what `pinCid` does.
 
 ### Added
+
 - **`waitForMessage(itemHash)`** (`backends/aleph-pin`) follows a message until Aleph has decided
   about it.
   - It ends with `processed`, or with `rejected` plus `errorCode` and `details`. For a credit
@@ -145,6 +165,7 @@
     delegate, finding the backup by the paying account, restore.
 
 ### Documented
+
 - **Who pays for a delegate's STORE.** It is the owner, the account named in `content.address`.
   Aleph checks the owner's credit and books the cost to it, not to the delegate (measured
   2026-10-03, #147).
@@ -152,10 +173,11 @@
 ## 0.16.1 (2026-10-02)
 
 ### Fixed
+
 - **An encrypted database restores** (`restoreFromBlocks`, and with it `restoreFromCID`). A head
   was joined from its raw dag-cbor fields. For a database opened with `encryption`, those are not
-  the entry OrbitDB expects, so `joinEntry` threw (*"`undefined` is not supported by the IPLD
-  Data Model"*). The restore went on and reported the database with `joined: 0`, and the
+  the entry OrbitDB expects, so `joinEntry` threw (_"`undefined` is not supported by the IPLD
+  Data Model"_). The restore went on and reported the database with `joined: 0`, and the
   database came back empty. Heads are now read through the log (`log.get`), which decodes its
   own entries, with the raw fields as the fallback. Found by Le-Space/belege, whose eight
   databases are all encrypted. Only unencrypted databases were tested before.
@@ -163,6 +185,7 @@
 ## 0.16.0 (2026-09-29)
 
 ### Added
+
 - **Several databases in one backup, and back.** The metadata's `databases` was always a list,
   but every writer put one database in it and `restoreFromCID` read only `databases[0]`. An
   application whose state is eight OrbitDB databases had to bundle and restore them itself.
@@ -201,10 +224,10 @@
     the probe's accounts held nothing.
 
 - **Operations can wait for a button** (#141). `announceOnLocalUpdate: false` is how an application
-  says *"typing must not spend airtime — a button decides"*. On the delta plane that rightly means
+  says _"typing must not spend airtime — a button decides"_. On the delta plane that rightly means
   do not watch local writes at all; on the operation plane it cannot, because the write still has to
   be **remembered** or the button has nothing to send. Until this, setting `liveUpdates:
-  "operations"` alongside that flag changed nothing whatsoever — measured in funkpost's browser, the
+"operations"` alongside that flag changed nothing whatsoever — measured in funkpost's browser, the
   wire still showed `→ blocks 860 B` and no `→ op` anywhere.
 
   The hook now registers on the operation plane either way, and only what it does with the entry
@@ -226,6 +249,7 @@
 ## 0.15.0 (2026-09-29)
 
 ### Added
+
 - **`liveUpdates: "operations"` — carry the change, not the entry that held it** (#135). A keyvalue
   entry holding `{text, done, ts}` costs **1774 B** on the air once the delta plane has put the
   entry and its identity block there. The operation inside it — `{op, key, value}`, which OrbitDB
@@ -252,9 +276,8 @@
   so an announce without `r` is noted and left alone.
 
   What it costs, and none of it is hidden:
-
   - **The two logs diverge.** Each device holds its own entry for the same change. `o.key` is what
-    keeps the *view* single: a keyvalue store resolves to the latest value **per key**, so two
+    keeps the _view_ single: a keyvalue store resolves to the latest value **per key**, so two
     entries under one key are one row. The receiver must therefore perform the change under the
     **sender's** key and never invent one — which is what `performOperation` does.
   - **Two devices editing one key while both are offline can disagree** until an IP path merges
@@ -266,10 +289,11 @@
     choosing this plane is what made it matter. This is also where a device pairing belongs: two
     devices that have met put each other's identity in the write set.
   - **A lost operation is lost.** `send`'s own comment — that a dropped message is re-derivable
-    because a peer still wanting it asks again — holds for `announce`/`want`/`blocks` and *not* for
+    because a peer still wanting it asks again — holds for `announce`/`want`/`blocks` and _not_ for
     `op`.
 
 ### Fixed
+
 - **The presence timeout test raced itself** (#136). It set `peerTimeoutMs: 1` and then asserted the
   peer was still present; convergence does real OrbitDB work and a loaded runner stretches it well
   past a millisecond, so a scheduled run of `main` went red and a re-run went green. One window,
@@ -278,6 +302,7 @@
 ## 0.14.1 (2026-09-25)
 
 ### Fixed
+
 - **The delta walk asked block storage about entries the log does not have, and paid a network
   timeout for each one** (funkpost#170). 0.14.0's `reachableFrom` walks the peer's announced heads
   to work out what they can already reach. It read those hashes straight out of
@@ -295,7 +320,7 @@
   `applyDeltaToStores`'s closure check; this walk broke it.
 
   Not caught here because the suite's own nodes are built `useBootstrap: false, useDHT: false,
-  autoDial: false`, where a miss fails instantly. The regression test pins the rule instead of the
+autoDial: false`, where a miss fails instantly. The regression test pins the rule instead of the
   timing: block storage is never asked about a head the log does not hold.
 
 **0.14.0 should not be used.** Any consumer whose Helia node can reach a network — which is the
@@ -308,14 +333,15 @@ over LoRa. The carrier moves about half a kilobyte a minute, which turns every p
 into minutes and made both of these visible at once.
 
 ### Fixed
+
 - **A delta carried the whole log, every time** (#127, in #129). `createDelta` walked back from
   our heads and stopped only at the hashes the peer had announced — but an OrbitDB entry's `refs`
-  are skip-list back-references that point *past* its parent, so the walk followed one around the
+  are skip-list back-references that point _past_ its parent, so the walk followed one around the
   stop and carried on to the root. A peer missing a single entry was sent everything: **12 blocks
   and 8742 B where 2 blocks and 1533 B were owed.** Ten minutes of airtime to deliver one todo.
 
   The stop set is now everything reachable from the heads the peer named, walked through `next`
-  *and* `refs`, so a ref can no longer route around it. A peer standing exactly where we do is
+  _and_ `refs`, so a ref can no longer route around it. A peer standing exactly where we do is
   answered without reading the ancestry at all.
 
   The other half of #127 stays open, and is now pinned by a test rather than described: when the
@@ -325,6 +351,7 @@ into minutes and made both of these visible at once.
   naming a few ancestors alongside its heads, so the other side has something to stop at.
 
 ### Added
+
 - **`applied` — what a delivery came to, including when it came to nothing** (#130). `synced`
   fires only when something joined, so a delivery that joined nothing produced no event at all,
   and four different outcomes shared that silence. Two of them are opposite findings:
@@ -352,6 +379,7 @@ into minutes and made both of these visible at once.
 ## 0.13.0 (2026-09-24)
 
 ### Changed — **breaking**
+
 - **Backups are encrypted by default** (#121). `dehydrate` refuses to upload unless it is given
   `encrypt`/`decrypt`, or told `dontEncrypt: true`:
 
@@ -366,8 +394,9 @@ into minutes and made both of these visible at once.
   want from a line that turns off protection.
 
 ### Added
+
 - **`@le-space/orbitdb-storage-bridge/backends/encryption`** — `withEncryption(backend, { encrypt,
-  decrypt })` encrypts on the way out, `decryptingFetch(fetchBytes, { decrypt })` decrypts on the
+decrypt })` encrypts on the way out, `decryptingFetch(fetchBytes, { decrypt })` decrypts on the
   way back. Both halves are needed: a restore does not read through a backend, it fetches from a
   gateway or from peers, so `getBlob` never runs during one.
 
@@ -382,6 +411,7 @@ into minutes and made both of these visible at once.
   reader: an encrypted backup and no key.
 
 ### Fixed
+
 - **`createPeerFetch` needs `identify`, and the documentation did not say so.** A node built with
   `withLibp2pLight` dials the provider successfully and then fetches nothing: without `identify`,
   bitswap never learns that the peer speaks bitswap, no want is sent, and the call fails with
@@ -408,7 +438,7 @@ into minutes and made both of these visible at once.
 - **The storage probe is an example in this repository** (#110). It is a static page — one HTML
   file and one small module, no build step — that measures whether this package's backends work
   from a browser with no server: Aleph, Pinata and Lighthouse endpoints, their CORS on success
-  *and* on refusal, a provider lookup over `/routing/v1/providers`, and a real upload with the
+  _and_ on refusal, a provider lookup over `/routing/v1/providers`, and a real upload with the
   reader's own key, read back.
 
   It was in a GPL-3.0 application, where someone evaluating this MIT package had no reason to look
@@ -486,7 +516,7 @@ into minutes and made both of these visible at once.
   that requests blocks dropped `runOnLimitedConnections` (ipfs/helia#1124). `createPeerFetch`
   dials providers, and a browser behind carrier NAT reaches some of them through a relay.
 
-- **Retrieval defaults have one entry where they had three** — see *Fixed*. Nothing was removed
+- **Retrieval defaults have one entry where they had three** — see _Fixed_. Nothing was removed
   from the API; the other two hosts were retired by the people who ran them.
 
 ### Fixed
@@ -514,11 +544,12 @@ Released from the workflow without a changelog entry at the time; written here f
 history does not skip a version.
 
 ### Added
+
 - **`createMirrorBackend([...])`: one backup on several services.** `putBlob` writes to all of
   them and resolves when at least one accepted, with every service's outcome carried in the
   handle — a silent partial success is the one answer that is not acceptable. `getBlob` asks them
   in order and stops at the first that answers. Capabilities are the honest intersection:
-  `browserSafeAuth`, `carImport` and `preservesInnerCids` only when *every* member has them,
+  `browserSafeAuth`, `carImport` and `preservesInnerCids` only when _every_ member has them,
   `minBlobSize` the largest, `pinByCid` when any member can pin. `list()` and `remove()` are not
   offered — a union listing has duplicates, and a half-succeeded deletion leaves a copy behind
   while reporting success.
@@ -532,9 +563,10 @@ history does not skip a version.
 ## 0.10.0 (2026-09-19)
 
 ### Added
+
 - **The restored device writes, and the original takes the entry** — P11 step 5, shown rather than
   argued (`test/restored-can-write.test.js`). A signing key derived from the same secret produces
-  the *same identity document*, hash for hash, on a machine that never saw the first, so the
+  the _same identity document_, hash for hash, on a machine that never saw the first, so the
   access controller that named the original writer accepts entries from the device that came back.
   A device holding another key restores the same database, reads it, and is refused on write —
   which is what makes the acceptance mean anything.
@@ -546,8 +578,8 @@ history does not skip a version.
   own label is not enough with OrbitDB's default provider, which looks the identity's key up under
   the derived hex id.
 
-
 ### Added
+
 - **`@le-space/orbitdb-storage-bridge/dehydrate`: put a database where a second device can find it, and get
   it back.** `dehydrate()` backs the database up as a CAR, uploads it, and publishes an IPNS
   pointer to it under a name derived from a seed; `hydrate()` finds that pointer with the same
@@ -558,17 +590,17 @@ history does not skip a version.
 
   **There is no encrypted identity archive, and that is not an oversight**: with a signing key
   derived from the same secret (`@le-space/orbitdb-identity-provider-webauthn-did` 0.6.0) the new
-  device recomputes the identity instead of carrying it, so the restored copy can *write* and
+  device recomputes the identity instead of carrying it, so the restored copy can _write_ and
   there is nothing secret to store in the open.
 
   The whole procedure, including what it does not promise, is written up in
   [docs/RECOVERY-ON-A-SECOND-DEVICE.md](docs/RECOVERY-ON-A-SECOND-DEVICE.md).
 
-
 ### Added
+
 - **`@le-space/orbitdb-storage-bridge/pointer-ipns`: a pointer a second device can find with nothing but a
   key.** A backup's CID is enough to fetch it from anywhere — but a device that has lost
-  everything cannot be *told* a CID, because there is nobody left to tell it. So the name is
+  everything cannot be _told_ a CID, because there is nobody left to tell it. So the name is
   computed instead: `derivePointerKey(seed)` stretches a secret (a passkey's PRF output is the
   case this was written for, funkpost#93) into an Ed25519 key, and the IPNS name follows from it,
   so two devices holding the same seed reach the same name without exchanging anything.
@@ -583,10 +615,10 @@ history does not skip a version.
   could not be established, and which the module therefore does not promise: that a record travels
   beyond the endpoint that took it, and how long it is kept.
 
-
 ### Fixed
+
 - **One stuck send no longer stalls the whole sync.** `handlePayload` put every incoming message
-  on one promise chain, and the handlers awaited `courier.send`, which resolves on *delivery* —
+  on one promise chain, and the handlers awaited `courier.send`, which resolves on _delivery_ —
   an end-to-end ARQ over a carrier that is slow by law. On two radios that meant a joiner asked
   fourteen times and got one answer: the first reply was still in flight and every later message
   sat behind it, never even looked at ([funkpost#83](https://github.com/NiKrause/funkpost/issues/83)).
@@ -595,6 +627,7 @@ history does not skip a version.
   symptom from the log — one message heard instead of four.
 
 ### Added
+
 - **A reply that has not gone out yet is superseded by a newer one of the same kind to the same
   peer.** The peer asked again, so the older answer would spend airtime on what it already has.
   Peers without a sender id (an older version) are never superseded, because they cannot be told
@@ -607,6 +640,7 @@ history does not skip a version.
 ## 0.9.0 (2026-09-19)
 
 ### Added
+
 - **Presence in `courier-sync`: who is out there, not which radios are.** A carrier can tell you
   a radio is in range; it cannot tell you whether a program on the other end keeps the same
   database, and that is the question an app has to answer before spending airtime. Every message
@@ -622,6 +656,7 @@ history does not skip a version.
 ## 0.8.1 (2026-09-18)
 
 ### Fixed
+
 - **`restoreFromCID` opens the database the way the caller asks.** It hard-coded the type and
   nothing else, so on a node built without a pubsub service — funkpost's mesh-only demo, which
   opens everything with `sync: false` — OrbitDB's `Sync` subscribed on open and threw
@@ -629,6 +664,7 @@ history does not skip a version.
   hand anything back. Pass `open: { sync: false }`, or anything else `orbitdb.open` takes.
 
 ### Changed
+
 - **Backing up no longer carries the Storacha client.** `backup-car.js` imported the main entry,
   which imports `@storacha/client` at the top, so a page that backs up to Aleph paid for a client
   it never calls — **88 kB gzipped**, measured in a real bundle (`mesh-todo`: 420.4 → 508.6 kB).
@@ -642,6 +678,7 @@ history does not skip a version.
 ## 0.8.0 (2026-09-18)
 
 ### Added
+
 - **Lighthouse storage driver**, `@le-space/orbitdb-storage-bridge/backends/lighthouse`: upload, listing
   and deletion over the endpoints `@lighthouse-web3/sdk` 0.4.7 uses, without the SDK. A backup's
   CAR goes up as a plain file and comes back byte for byte; `carImport: true` sends CARs to
@@ -650,6 +687,7 @@ history does not skip a version.
   key and the listing are, but the test account's trial had expired (2026-09-17, issue #60).
 
 ### Fixed
+
 - **Backups work in browsers.** `backupDatabase` built its CAR through Node's `Readable.from`,
   which the stream polyfill a bundler gives the browser does not have, so every browser backup
   failed before anything was uploaded. The CAR is now read with a plain async loop.
@@ -668,6 +706,7 @@ history does not skip a version.
 ## 0.7.0 (2026-09-17)
 
 ### Added
+
 - **Pinata storage driver**, `@le-space/orbitdb-storage-bridge/backends/pinata` (#80, #84). Verified against a
   live free-plan account on 2026-09-17: upload, listing, deletion, CAR backups and a database
   restored on a second node. Pin by CID and CAR import are paid-plan features, so both are opt-in
@@ -675,6 +714,7 @@ history does not skip a version.
   the bare domain Pinata's dashboard shows. Errors carry Pinata's reason.
 
 ### Changed
+
 - `key-did-provider-ed25519`, `@orbitdb/identity-provider-did` and `key-did-resolver` are
   devDependencies now: nothing the package ships imports them. Installing the package brings no
   known vulnerability (`npm audit --omit=dev`) (#85).
@@ -688,6 +728,7 @@ history does not skip a version.
   `libp2p:orbitdb-storacha:*`.
 
 ### Removed
+
 - `StorachaTest.svelte`, `StorachaTestWithReplication.svelte` and `StorachaTestWithWebAuthn.svelte`
   are no longer in the package (#83). Each imported a file no release ever contained, so none of
   them could be imported.
@@ -698,6 +739,7 @@ Releases 0.5.0 to 0.6.0 are described in their
 ## 0.4.3 (2026-01-23)
 
 ### Added
+
 - IPFS network restore with gateway fallback and new network download tests.
 - In-memory Storacha test mode with local gateway support and improved integration test harness.
 - Timestamped backup example and dedicated test suite.
@@ -705,13 +747,16 @@ Releases 0.5.0 to 0.6.0 are described in their
 - New E2E coverage for Svelte examples.
 
 ### Changed
+
 - Logging migrated to `@libp2p/logger` for structured output.
 - Svelte example apps updated (UI polish, configs, and test setup).
 - CI now runs Svelte E2E jobs sequentially and pins Playwright to IPv4 loopback.
 
 ### Fixed
+
 - Integration test stability (sequencing, retries, and cleanup improvements).
 - Linting and dependency fixes across the repo.
 
 ### Removed
+
 - `examples/svelte/ucan-delegation` moved out of mainline (now on a separate branch).

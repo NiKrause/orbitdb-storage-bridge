@@ -624,6 +624,9 @@ describe("increments", () => {
       allowGaps: true,
     });
     expect(result.sequences).toEqual([1, 3]);
+    // And the caller is told what the chain looked like.
+    expect(result.gaps).toEqual([2]);
+    expect(result.duplicates).toEqual([]);
     await live.stop();
   });
 
