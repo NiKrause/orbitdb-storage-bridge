@@ -826,3 +826,144 @@ describe("the FORGET message", () => {
     expect(forgotten).toEqual([["hash2", "hash1"]]);
   });
 });
+
+describe("a STORE's ref: one chain of several on an account", () => {
+  const SIG = "0x" + "ab".repeat(65);
+  const OWNER = "0xA1b2C3d4E5f60718293A4b5C6d7E8f9012345678";
+  const DELEGATE = "0x9876543210FEDCBA9876543210fedcba98765432";
+  const content = (message) => JSON.parse(message.item_content);
+
+  test("buildStoreMessage carries a ref when given, none otherwise, and refuses an empty one", async () => {
+    const plain = await buildStoreMessage({ sender: ADDRESS, cid: CID });
+    expect("ref" in content(plain)).toBe(false);
+    const tagged = await buildStoreMessage({
+      sender: ADDRESS,
+      cid: CID,
+      ref: "archived01/0a1b2c3d",
+    });
+    expect(content(tagged).ref).toBe("archived01/0a1b2c3d");
+    // The ref is part of what is hashed and signed.
+    expect(tagged.item_hash).not.toBe(plain.item_hash);
+    await expect(
+      buildStoreMessage({ sender: ADDRESS, cid: CID, ref: "" }),
+    ).rejects.toThrow(/ref/);
+    await expect(
+      buildStoreMessage({ sender: ADDRESS, cid: CID, ref: 7 }),
+    ).rejects.toThrow(/ref/);
+  });
+
+  test("createAlephPin stamps its ref on every STORE, and a meta.ref on one call wins", async () => {
+    const fetchImpl = recordingFetch();
+    const pin = createAlephPin({
+      sender: ADDRESS,
+      sign: async () => SIG,
+      ref: "chain-a",
+      fetch: fetchImpl,
+    });
+    await pin(CID);
+    await pin(CID, { name: "x.car", ref: "chain-b" });
+    expect(content(fetchImpl.calls[0].body.message).ref).toBe("chain-a");
+    expect(content(fetchImpl.calls[1].body.message).ref).toBe("chain-b");
+
+    const none = recordingFetch();
+    await createAlephPin({
+      sender: ADDRESS,
+      sign: async () => SIG,
+      fetch: none,
+    })(CID, { name: "x.car" });
+    expect("ref" in content(none.calls[0].body.message)).toBe(false);
+  });
+
+  const stored = (itemHash, cid, time, ref) => ({
+    item_hash: itemHash,
+    sender: DELEGATE,
+    channel: "SOME-BACKUP",
+    content: {
+      address: OWNER,
+      item_type: "ipfs",
+      item_hash: cid,
+      payment: { type: "credit" },
+      time,
+      ...(ref ? { ref } : {}),
+    },
+  });
+
+  test("listAlephStores asks by ref, reports it, and keeps nothing a careless host adds", async () => {
+    const fetchImpl = answeringFetch([
+      {
+        status: 200,
+        body: {
+          pagination_total: 3,
+          messages: [
+            stored("h1", "Qm1", 100, "chain-a"),
+            stored("h2", "Qm2", 200, "chain-b"),
+            stored("h3", "Qm3", 300),
+          ],
+        },
+      },
+    ]);
+    const { stores } = await listAlephStores({
+      owner: OWNER,
+      channel: "SOME-BACKUP",
+      ref: "chain-a",
+      fetch: fetchImpl,
+    });
+    expect(new URL(fetchImpl.urls[0]).searchParams.get("refs")).toBe("chain-a");
+    // The host was asked for chain-a; what it hands back beyond that is not kept.
+    expect(stores.map((s) => s.itemHash)).toEqual(["h1"]);
+    expect(stores[0].ref).toBe("chain-a");
+
+    const all = answeringFetch([
+      {
+        status: 200,
+        body: {
+          pagination_total: 2,
+          messages: [
+            stored("h1", "Qm1", 100, "chain-a"),
+            stored("h3", "Qm3", 300),
+          ],
+        },
+      },
+    ]);
+    const { stores: every } = await listAlephStores({
+      owner: OWNER,
+      channel: "SOME-BACKUP",
+      fetch: all,
+    });
+    expect(new URL(all.urls[0]).searchParams.has("refs")).toBe(false);
+    expect(every.map((s) => s.ref ?? null)).toEqual([null, "chain-a"]);
+    await expect(
+      listAlephStores({ owner: OWNER, ref: "", fetch: all }),
+    ).rejects.toThrow(/ref/);
+  });
+
+  test("forgetAlephStores with a ref forgets that chain and no other", async () => {
+    const calls = [];
+    const fetchImpl = async (url) => {
+      calls.push(String(url));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          messages: [stored("h1", "Qm1", 100, "chain-a")],
+          pagination_total: 1,
+        }),
+        text: async () => "",
+      };
+    };
+    const forgotten = [];
+    const result = await forgetAlephStores({
+      owner: OWNER,
+      channel: "SOME-BACKUP",
+      ref: "chain-a",
+      forget: async (hashes) => {
+        forgotten.push(hashes);
+        return { itemHash: "f", status: "processed" };
+      },
+      fetch: fetchImpl,
+    });
+    expect(new URL(calls[0]).searchParams.get("refs")).toBe("chain-a");
+    expect(result.forgotten).toEqual(["h1"]);
+    expect(forgotten).toEqual([["h1"]]);
+  });
+});

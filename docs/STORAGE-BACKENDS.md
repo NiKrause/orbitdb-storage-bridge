@@ -272,6 +272,11 @@ Measured on 2026-10-03 against `api2.aleph.im`, with throwaway accounts and 2 Mi
   for it: its `security` aggregate, set with `createAlephAuthorizer`. A delegate with no credit at
   all stored for a funded owner. The owner's credit was checked, and the cost appeared on the
   owner, not on the delegate. So the key in a browser signs, and the account pays.
+- **One chain of several: `ref`.** A STORE may carry Aleph's free-text `ref`, and the messages API
+  filters by it (`refs=`, together with `owners=`). `createAlephPin({ ref })` stamps it on every STORE,
+  `listAlephStores({ ref })` and `forgetAlephStores({ ref })` ask for that chain alone — the
+  increments of one database on an account that keeps several, without downloading the others to
+  find out which is which. Opaque to Aleph; use a derived fingerprint rather than an address.
 - **Listing by the owner.** `messages.json?owners=<account>` finds every STORE kept for an account,
   a delegate's included; `addresses=` matches the sender and misses those. `listAlephStores` wraps
   this, so a page can find a backup by the paying account's public address alone.
@@ -391,9 +396,12 @@ to upload unless it is given a way to encrypt, or told plainly not to.
 
 ```js
 await dehydrate({
-  orbitdb, address, seed, backend,
-  encrypt,   // (plaintext) => { ciphertext, iv }
-  decrypt,   // (ciphertext, iv) => plaintext
+  orbitdb,
+  address,
+  seed,
+  backend,
+  encrypt, // (plaintext) => { ciphertext, iv }
+  decrypt, // (ciphertext, iv) => plaintext
 });
 
 // A backup meant to be readable by anyone holding the CID says so:
@@ -418,15 +426,15 @@ gateway or from peers, so `withEncryption`'s `getBlob` never runs during one. `d
 the backend, `hydrate` wraps the fetcher, and a caller wiring the pieces by hand uses
 `withEncryption` and `decryptingFetch` from `./backends/encryption`.
 
-| | |
-| --- | --- |
-| the envelope | `"OSBE"`, a version, the IV length, the IV, then the ciphertext. A CAR starts with a varint and JSON with `{`, so neither is mistaken for one |
-| a plaintext backup | still restores: the envelope is recognised, and its absence means the bytes are passed through |
-| no key at hand | `explainIfEncrypted` says so, instead of failing inside the CAR reader |
-| a wrong key | refused with the reason, naming the CID |
-| `carImport`, `preservesInnerCids` | **false** through an encrypting backend: the stored bytes are an envelope, not a CAR |
-| dedup | gone. A fresh IV each time means two backups of an unchanged database share nothing |
-| verification | unchanged. Blocks are checked against their CIDs **after** decryption, which is what keeps a stranger's bytes safe |
+|                                   |                                                                                                                                               |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| the envelope                      | `"OSBE"`, a version, the IV length, the IV, then the ciphertext. A CAR starts with a varint and JSON with `{`, so neither is mistaken for one |
+| a plaintext backup                | still restores: the envelope is recognised, and its absence means the bytes are passed through                                                |
+| no key at hand                    | `explainIfEncrypted` says so, instead of failing inside the CAR reader                                                                        |
+| a wrong key                       | refused with the reason, naming the CID                                                                                                       |
+| `carImport`, `preservesInnerCids` | **false** through an encrypting backend: the stored bytes are an envelope, not a CAR                                                          |
+| dedup                             | gone. A fresh IV each time means two backups of an unchanged database share nothing                                                           |
+| verification                      | unchanged. Blocks are checked against their CIDs **after** decryption, which is what keeps a stranger's bytes safe                            |
 
 ## 9. Recommendation
 

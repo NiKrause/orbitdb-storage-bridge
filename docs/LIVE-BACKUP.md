@@ -61,7 +61,8 @@ const live = createLiveBackup({
   state: {
     // what survives a restart: a sequence number and a few hashes per database
     load: async () => JSON.parse(localStorage.getItem("live-backup") ?? "null"),
-    save: async (state) => localStorage.setItem("live-backup", JSON.stringify(state)),
+    save: async (state) =>
+      localStorage.setItem("live-backup", JSON.stringify(state)),
   },
   onShipped: ({ sequence, handle, kept, entries, bytes, at }) => {},
   onError: (error) => {},
@@ -95,14 +96,34 @@ that is still pending, so the increment grows rather than anything being lost. `
 many updates are waiting and what the last failure was, so an application can show "last backed up
 …" and mean it.
 
+## Several chains on one account
+
+Each watcher numbers its own increments from 1. Two databases on one account, or two devices
+writing the same database, therefore produce chains whose sequence numbers collide, and a listing
+of the whole account mixes them. On Aleph give every chain its own `ref` (`createAlephPin({ ref })`;
+a per-database fingerprint, not the address) and list, restore and forget by it
+(`listAlephStores({ ref })`, `forgetAlephStores({ ref })`). Where devices still collide,
+`joinIncrements`/`restoreFromIncrements` with `allowGaps: true` join everything — OrbitDB's join is a
+merge, and a duplicate sequence costs nothing — and return `gaps` and `duplicates` so the
+application can say so. A gap is still worth a word to the user: an increment the store does not
+hold is entries nobody has.
+
 ## Restoring
 
 ```js
-import { readIncrement, restoreFromIncrements } from "@le-space/orbitdb-storage-bridge/live-backup";
+import {
+  readIncrement,
+  restoreFromIncrements,
+} from "@le-space/orbitdb-storage-bridge/live-backup";
 
 const increments = [];
-for (const handle of handles) increments.push(await readIncrement(await backend.getBlob(handle)));
-await restoreFromIncrements(orbitdb, { base, increments, open: { encryption } });
+for (const handle of handles)
+  increments.push(await readIncrement(await backend.getBlob(handle)));
+await restoreFromIncrements(orbitdb, {
+  base,
+  increments,
+  open: { encryption },
+});
 ```
 
 - `readIncrement(bytes)` checks every block against its CID and finds the manifest; it refuses a
@@ -114,7 +135,7 @@ await restoreFromIncrements(orbitdb, { base, increments, open: { encryption } })
   (`allowPlaintextReads` is off since 0.19.0), so a store or gateway cannot hand a sealed archive
   a plaintext list of another database.
 - `base` is optional: what `bundleDatabases` or `openAppBackup` returned (`{ metadata | manifest,
-  blocks }`). Increments are ordered by `sequence`; for each database the heads of the newest
+blocks }`). Increments are ordered by `sequence`; for each database the heads of the newest
   source that names it are joined. `mergeIncrements` does the folding alone, for a caller that
   restores by other means.
 - Joining merges: what is in the node stays, what the increments hold is added. A head whose entries
@@ -129,7 +150,10 @@ books that are open on screen: the blocks go into the log's storage and each hea
 instance the application already holds. Joining merges; the application reloads its view afterwards.
 
 ```js
-const { joined, heads } = await joinIncrements(todos, { increments, blockstore: orbitdb.ipfs.blockstore });
+const { joined, heads } = await joinIncrements(todos, {
+  increments,
+  blockstore: orbitdb.ipfs.blockstore,
+});
 ```
 
 `blockstore` is where the application's own (non-dag-cbor) blocks go; without it they are counted
@@ -150,9 +174,16 @@ Increments never go away by themselves: each is a STORE the account pays for by 
 full backup, or when an archive is given up, the account forgets them:
 
 ```js
-import { createAlephForget, forgetAlephStores } from "@le-space/orbitdb-storage-bridge/backends/aleph-pin";
+import {
+  createAlephForget,
+  forgetAlephStores,
+} from "@le-space/orbitdb-storage-bridge/backends/aleph-pin";
 
-const forget = createAlephForget({ sender: address, sign, channel: "SIMPLE-TODO-ARCHIVED01" });
+const forget = createAlephForget({
+  sender: address,
+  sign,
+  channel: "SIMPLE-TODO-ARCHIVED01",
+});
 const { forgotten, kept, rejected, pending, failed } = await forgetAlephStores({
   owner: address,
   channel: "SIMPLE-TODO-ARCHIVED01",
