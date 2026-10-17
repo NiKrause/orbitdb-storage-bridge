@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased
+## 0.19.0 (2026-10-17)
 
 ### Added
 - **Forgetting on Aleph** (`backends/aleph-pin`): `buildForgetMessage`, `createAlephForget` and
