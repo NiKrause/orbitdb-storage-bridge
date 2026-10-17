@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased
+## 0.20.0 (2026-10-17)
 
 ### Changed, and worth reading before upgrading
 - **A sealed restore refuses plaintext.** `withEncryption` and `decryptingFetch` default
