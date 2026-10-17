@@ -1,5 +1,48 @@
 # Changes
 
+## Unreleased
+
+### Changed, and worth reading before upgrading
+- **A sealed restore refuses plaintext.** `withEncryption` and `decryptingFetch` default
+  `allowPlaintextReads` to `false`: a caller that brings a key expects ciphertext, and whoever
+  answers the fetch — gateway, service, network — could otherwise hand it a plaintext backup of
+  *another* database, which it would open and join (found in the 2026-10-16 audit). A backup
+  written before encryption is read with `allowPlaintextReads: true`, for that one restore, and
+  the acceptance is logged; `hydrate()` takes it as `restore.allowPlaintextReads`.
+- **A gateway's answer to a raw sha-256 CID is hashed** (`fetchFromGateways`, `matchesRawCid`):
+  bytes that do not match are not an answer, and the next gateway is asked. A UnixFS or dag-pb
+  CID names a DAG the service assembled and cannot be checked this way; the seal is what
+  protects those.
+- **`mergeIncrements` joins every source's heads**, not only the newest's: a join is a merge, a
+  stale head costs nothing, and a branch only an older increment saw — two devices shipping in
+  parallel, or a store that renumbered — is kept instead of dropped. It also names `gaps` and
+  `duplicates` in the sequence; `restoreFromIncrements` and `joinIncrements` refuse a chain
+  with either unless `allowGaps: true`, instead of searching the network thirty seconds per
+  missing block.
+- **The watcher moves its state once, after the upload is kept.** `countedPending` is read
+  before the walk (an update during it stays pending); a database unwatched during a flush no
+  longer leaves the state half moved; `rebase()` and `stop({ flush: true })` wait for a flush in
+  flight; a flush asked for after `stop()` does not run. A persisted state of another version
+  is refused with a reason instead of silently restarting the numbering at 1.
+
+### Added
+- **`joinIncrements(database, { blockstore })`**: the application's own (non-dag-cbor) blocks
+  go into the blockstore the caller names, e.g. `orbitdb.ipfs.blockstore`; without it they are
+  counted in `skippedRaw` and left out. OrbitDB's log storage refused their base32 names, so
+  an increment with a receipt file used to throw halfway.
+- **`createLiveBackup({ confirm })`**: a hook `(kept, handle) => kept` to follow a backend's
+  answer before the increment counts as shipped — Aleph answers `pending` first and may
+  reject later (no credit, no grant). A settled `status: "rejected"` fails the flush and the
+  state stays, so the next one ships it all again.
+- **`close()`** on the watcher: stop, and detach from every database.
+- `BackendHandle` declares `retained`, `status` and `itemHash`.
+- **`forgetAlephStores` answers in four buckets**: `forgotten` only once Aleph said `processed`,
+  `rejected` with the error code, `pending` for a FORGET still undecided when the time ran out
+  (with the FORGET's own item hash, to follow), and `failed` for a batch that could not be
+  sent — later batches still go. It pages by the API's total, not by a short page, since the
+  listing filters after the page was cut. A FORGET names at most 1000 hashes and 1000
+  characters of reason, checked before anything is signed.
+
 ## 0.19.0 (2026-10-17)
 
 ### Added
