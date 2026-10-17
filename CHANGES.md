@@ -1,6 +1,6 @@
 # Changes
 
-## 0.19.0 (2026-10-17)
+## Unreleased
 
 ### Changed, and worth reading before upgrading
 - **A sealed restore refuses plaintext.** `withEncryption` and `decryptingFetch` default
@@ -36,6 +36,16 @@
   state stays, so the next one ships it all again.
 - **`close()`** on the watcher: stop, and detach from every database.
 - `BackendHandle` declares `retained`, `status` and `itemHash`.
+- **`forgetAlephStores` answers in four buckets**: `forgotten` only once Aleph said `processed`,
+  `rejected` with the error code, `pending` for a FORGET still undecided when the time ran out
+  (with the FORGET's own item hash, to follow), and `failed` for a batch that could not be
+  sent — later batches still go. It pages by the API's total, not by a short page, since the
+  listing filters after the page was cut. A FORGET names at most 1000 hashes and 1000
+  characters of reason, checked before anything is signed.
+
+## 0.19.0 (2026-10-17)
+
+### Added
 - **Forgetting on Aleph** (`backends/aleph-pin`): `buildForgetMessage`, `createAlephForget` and
   `forgetAlephStores`. A FORGET signed by the STOREs' owner (or a delegate authorized for it)
   names them by item hash; the files they kept are unpinned and stop costing credits. The
@@ -45,12 +55,6 @@
   on a channel, spares what `keep` says (the newest full backup, say) and forgets the rest in
   batches, reporting forgotten, kept and rejected by item hash. First consumer: simple-todo's
   `archived01` ("delete the archive"); Le-Space/belege next.
-  - `forgetAlephStores` answers in four buckets: `forgotten` only once Aleph said `processed`,
-    `rejected` with the error code, `pending` for a FORGET still undecided when the time ran out
-    (with the FORGET's own item hash, to follow), and `failed` for a batch that could not be
-    sent — later batches still go. It pages by the API's total, not by a short page, since the
-    listing filters after the page was cut. A FORGET names at most 1000 hashes and 1000
-    characters of reason, checked before anything is signed.
 
 ## 0.18.0 (2026-10-16)
 
