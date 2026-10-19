@@ -49,6 +49,9 @@ not from a press release.
   instead, and `lib/backends/storacha.js` is kept because the in-memory upload-api in `test/helpers/`
   still speaks the protocol and because it is the reference for what a UCAN-delegated backend looked
   like when one existed.
+- **The client is an optional peer dependency since 0.22.0.** `npm install` no longer carries the
+  28 `@storacha/*`, `@ucanto/*` and `@web3-storage/*` packages; the main entry loads the client only
+  when a Storacha path is called, and `backends/storacha` needs `npm install @storacha/client`.
 - **Restore reaches whatever still holds the blocks.** A CID is a name anyone can resolve, so
   `peer-fetch` asks the peers that hold them; what it cannot do is ask Storacha, whose listing and
   gateway are gone.

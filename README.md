@@ -45,6 +45,11 @@ can find it from a passkey alone.
 npm install @le-space/orbitdb-storage-bridge
 ```
 
+That brings Aleph, Pinata, Lighthouse and the in-memory driver. The Storacha driver
+(`backends/storacha`, the `OrbitDBStorachaBridge` class) needs `@storacha/client`, an optional
+peer dependency since 0.22.0 — the service shut down on 2026-05-15, and 28 packages for a backend
+nobody can reach were not worth every install. `npm install @storacha/client` puts them back.
+
 ## Quick start
 
 The demos back up to Aleph, which accepts an upload without an account, so they run straight after
