@@ -1,0 +1,44 @@
+# Secret scanning: `gitleaks git` over the whole history, run by the CI job
+# `secrets` (.github/workflows/ci.yml) and by hand with `npx gitleaks git .`
+# or the binary.
+#
+# The history is not clean, and this file says so rather than hiding it. The
+# 2026-10-16 audit found 48 matches in ten commits, all from the Storacha era:
+#
+#   - recipient-key.txt (67204c3, 9b5aa56; tags v0.1.15 .. v0.17.0): a Storacha
+#     Ed25519 principal archive, deleted later but reachable from every tag in
+#     that range. The service shut down on 2026-05-15 and the principal cannot
+#     be rotated; it is treated as compromised and worth nothing.
+#   - delegation-token.txt (ff3bf62, 6176064; from v0.2.2): a UCAN delegation
+#     issued by that principal. Same fate.
+#   - examples/README.md, examples/svelte/ucan-delegation/*, scripts/ipfs-publish.sh,
+#     test/helpers/local-storage-config.js (branch feature/local-storage-testing):
+#     the same principal and the demo's keys quoted in docs and helpers.
+#
+# All eight files are gone at HEAD. The history of 36 tags was left as it is:
+# rewriting it would break every clone and lockfile that pins a tag, for a key
+# that opens nothing. The commits below are therefore allowed, by hash and
+# nothing wider: a new secret in any other commit fails the job.
+#
+# `recipient-key.txt` was committed because nothing stopped it. Now something
+# does.
+
+title = "orbitdb-storage-bridge"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Storacha-era key material, dead service, documented above"
+commits = [
+  "67204c3a6160a776c6235606ab989491ed449675",
+  "9b5aa56163ac74dae04cf3f953811b6fecaf7570",
+  "1a927efa15ff5a9efe08c12bdb08e7249912cc0a",
+  "e33f016be3e60d6f4c1d5a8b1a7a706507852a36",
+  "a751d4e5f01769a2699fee7ceefff52e6586d324",
+  "7847385915ffcc15a3c3f955b639741d19d251c0",
+  "8f2f37596451269aa749f1253e58aaf3f00fac6d",
+  "bbeef65ff7db4811b54f628f0a9eb0ade5823894",
+  "aaf8e21e54e39c8103ab80f27aedbdb13cfcde15",
+  "01efdf33ed3b28da90828f7c1a369ea6317a3ed4",
+]

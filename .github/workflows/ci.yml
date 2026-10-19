@@ -57,6 +57,35 @@ jobs:
       # a few seconds long and cannot be broken by the lockfile.
       - name: Check links
         run: npm run check:links
+  # A Storacha principal (recipient-key.txt) sat in this repository from
+  # v0.1.15 to v0.17.0 and nothing noticed until the 2026-10-16 audit. The
+  # binary is pinned by checksum, not by a floating action; the whole history
+  # is scanned, every branch and tag the checkout fetched, and .gitleaks.toml
+  # names the ten old commits that are allowed and why. Anything else fails.
+  secrets:
+    name: Secrets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks 8.30.1
+        env:
+          VERSION: 8.30.1
+          SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          curl -sSL -o gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"
+          echo "${SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+          ./gitleaks version
+
+      - name: Scan the history
+        run: ./gitleaks git --redact --no-banner --exit-code 1 --config .gitleaks.toml .
+
   # No credentials, no network: the protocol logic against an in-memory courier.
   # Runs beside lint rather than behind the Storacha chain, so a fork without
   # secrets still gets a signal — and so the suite downstream projects depend on
@@ -308,16 +337,17 @@ jobs:
   notify:
     name: Notify Results
     runs-on: ubuntu-latest
-    needs: [lint, courier-sync-tests, integration-tests, car-backup-tests, p256-ucan-tests, timestamped-backup-tests, network-download-tests, e2e-tests-simple, e2e-tests-orbitdb]
+    needs: [lint, secrets, courier-sync-tests, integration-tests, car-backup-tests, p256-ucan-tests, timestamped-backup-tests, network-download-tests, e2e-tests-simple, e2e-tests-orbitdb]
     if: always()
     steps:
       - name: Notify Success
-        if: needs.lint.result == 'success' && needs.courier-sync-tests.result == 'success' && needs.integration-tests.result == 'success' && needs.e2e-tests-simple.result == 'success' && needs.e2e-tests-orbitdb.result == 'success' && needs.car-backup-tests.result != 'failure' && needs.p256-ucan-tests.result != 'failure' && needs.timestamped-backup-tests.result != 'failure' && needs.network-download-tests.result != 'failure'
+        if: needs.lint.result == 'success' && needs.secrets.result == 'success' && needs.courier-sync-tests.result == 'success' && needs.integration-tests.result == 'success' && needs.e2e-tests-simple.result == 'success' && needs.e2e-tests-orbitdb.result == 'success' && needs.car-backup-tests.result != 'failure' && needs.p256-ucan-tests.result != 'failure' && needs.timestamped-backup-tests.result != 'failure' && needs.network-download-tests.result != 'failure'
         run: |
           echo "✅ All tests passed successfully!"
           echo "🎉 OrbitDB Storage Bridge is working correctly"
           echo "📋 Test Summary:"
           echo "  - Linting: PASSED"
+          echo "  - Secrets: PASSED"
           echo "  - Courier Sync: PASSED"
           echo "  - Integration Tests: PASSED"
           echo "  - CAR Backup Tests: PASSED"
@@ -326,12 +356,13 @@ jobs:
           echo "  - Network Download Tests: PASSED"
           echo "  - E2E Tests (simple-backup-restore): PASSED"
       - name: Notify Failure
-        if: needs.lint.result == 'failure' || needs.courier-sync-tests.result == 'failure' || needs.integration-tests.result == 'failure' || needs.car-backup-tests.result == 'failure' || needs.p256-ucan-tests.result == 'failure' || needs.timestamped-backup-tests.result == 'failure' || needs.network-download-tests.result == 'failure' || needs.e2e-tests-simple.result == 'failure'
+        if: needs.lint.result == 'failure' || needs.secrets.result == 'failure' || needs.courier-sync-tests.result == 'failure' || needs.integration-tests.result == 'failure' || needs.car-backup-tests.result == 'failure' || needs.p256-ucan-tests.result == 'failure' || needs.timestamped-backup-tests.result == 'failure' || needs.network-download-tests.result == 'failure' || needs.e2e-tests-simple.result == 'failure'
         run: |
           echo "❌ Some tests failed"
           echo "🔍 Please check the logs above for details"
           echo "📋 Test Summary:"
           echo "  - Lint: ${{ needs.lint.result }}"
+          echo "  - Secrets: ${{ needs.secrets.result }}"
           echo "  - Courier Sync: ${{ needs.courier-sync-tests.result }}"
           echo "  - Integration Tests: ${{ needs.integration-tests.result }}"
           echo "  - CAR Backup Tests: ${{ needs.car-backup-tests.result }}"
