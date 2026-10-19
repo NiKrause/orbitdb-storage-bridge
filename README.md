@@ -25,8 +25,8 @@ Where "somewhere else" is, is a choice:
 
 | Backend | Needs | |
 | --- | --- | --- |
-| `aleph` | nothing | the only backend a browser can write to with no key; ingest only |
-| `aleph-pin` | a signing key: the paying account's, or one it authorised | the signed STORE message that makes Aleph keep it, paid in credits |
+| `aleph` | nothing | the only backend a browser can write to with no key; ingest only — nothing is kept, listed or deleted here, see `aleph-pin` |
+| `aleph-pin` | a signing key: the paying account's, or one it authorised | the signed STORE message that makes Aleph keep it, paid in credits — and the FORGET that releases it |
 | `pinata` | a scoped JWT | pin-by-CID as well as CAR upload |
 | `lighthouse` | an API key | pay once, stored in perpetuity |
 | `memory` | nothing | in-process, for tests and demos |
@@ -38,6 +38,43 @@ peers that hold the blocks over libp2p, `gateway-fetch` asks an HTTP gateway. Tw
 points do not involve a storage service at all — `courier-sync` replicates over any byte courier
 (a LoRa mesh, a QR relay, a file), and `dehydrate`/`hydrate` put a database where a second device
 can find it from a passkey alone.
+
+How the pieces fit, as sequence diagrams: a full backup with a delegate's STORE and the restore on
+an empty device in [docs/APP-BACKUP.md](docs/APP-BACKUP.md), the increments between two backups in
+[docs/LIVE-BACKUP.md](docs/LIVE-BACKUP.md), the FORGET in
+[docs/STORAGE-BACKENDS.md](docs/STORAGE-BACKENDS.md#forgetting).
+
+## Entry points
+
+Every import path the package exports, and what it is for. New code uses the sub-paths; the main
+entry is the Storacha-era class and the helpers it grew.
+
+| Import (`@le-space/orbitdb-storage-bridge` + …) | What it is |
+| --- | --- |
+| `.` | `OrbitDBStorachaBridge` and the older helpers (`backupDatabase`, `restoreDatabase`, `analyzeBlocks`, `extractManifestCID`); Storacha itself loads only when a Storacha path is called |
+| `/backup-car` | `createCARFromBlocks`, `readBlocksFromCAR`, `backupDatabaseCAR` — the CAR every backup is ([docs/CAR-BACKUP.md](docs/CAR-BACKUP.md)) |
+| `/restore-cid` | `restoreFromCID`, `restoreFromBlocks`: a database back from a CID, or from blocks verified one by one |
+| `/extract-blocks` | `extractDatabaseBlocks`, `bundleDatabases`: one database's blocks, or several databases' in one bundle |
+| `/app-backup` | one sealed file for an application: `buildAppBackup`, `openAppBackup`, `restoreAppBackup`, `readAppBackupHeader`, `isAppBackup` |
+| `/live-backup` | increments: `createLiveBackup`, `collectIncrement`, `readIncrement`, `mergeIncrements`, `restoreFromIncrements`, `joinIncrements` |
+| `/dehydrate` | `dehydrate`, `hydrate`: a database where a second device finds it from a secret alone |
+| `/pointer-ipns` | `publishPointer`, `resolvePointer`: the IPNS pointer `dehydrate` publishes, under a name derived from a seed |
+| `/gateway-fetch` | `fetchFromGateways`: bytes by CID over HTTP, verified against the CID |
+| `/peer-fetch` | `createPeerFetch`, `createGatewayFirstFetch`: bytes by CID from the peers that hold them, over libp2p |
+| `/courier-sync` | `createCourierSync`: replication over any byte courier — a LoRa mesh, a QR relay, a file |
+| `/memory-courier` | `createMemoryCourierPair`: the in-process courier for tests and demos |
+| `/backends/types` | the contract: `defineBackend`, `BackendError`, the capability flags |
+| `/backends/memory` | the in-process driver |
+| `/backends/aleph` | `createAlephBackend`: ingest to Aleph's IPFS with no key; nothing kept, listed or deleted here |
+| `/backends/aleph-pin` | `createAlephPin`, `createAlephAuthorizer`, `listAlephStores`, `waitForMessage`, `createAlephForget`, `forgetAlephStores`: what makes Aleph keep a file, and lets it go |
+| `/backends/pinata` | Pinata: pin by CID or upload, with a scoped JWT; `remove()` by file id |
+| `/backends/lighthouse` | Lighthouse: upload with an API key; `list()` and `remove()` |
+| `/backends/storacha` | the Storacha driver; needs the optional peer `@storacha/client`, and a service that no longer answers |
+| `/backends/mirror` | one backup to several backends |
+| `/backends/encryption` | `withEncryption`: the service holds ciphertext |
+| `/backends/choose` | `createBackendFromChoice`: a backend from a name and a key, for a page's form |
+| `/backends/resolve` | `resolveBackend`: the options-to-backend step the older functions share |
+| `/StorachaAuth.svelte`, `/StorachaIntegration.svelte`, `/storacha-backup`, `/components/*` | point into a `dist/` that no build produces; not importable ([docs/STORACHA-UI-HISTORY.md](docs/STORACHA-UI-HISTORY.md)) |
 
 ## Install
 
@@ -82,7 +119,7 @@ Galaxy A57 with the same key brought the database back and wrote to it. Source:
 | [docs/DESIGN.md](docs/DESIGN.md) | the problem this solves, and how a backup and a restore actually work |
 | [docs/STORAGE-BACKENDS.md](docs/STORAGE-BACKENDS.md) | every backend evaluated — prices, limits, and what has been verified against a live account |
 | [docs/RECOVERY-ON-A-SECOND-DEVICE.md](docs/RECOVERY-ON-A-SECOND-DEVICE.md) | the passkey recovery procedure, step by step |
-| [docs/CAR-BACKUP.md](docs/CAR-BACKUP.md) | CAR-based timestamped backups |
+| [docs/CAR-BACKUP.md](docs/CAR-BACKUP.md) | the CAR as the unit of every backup, and the Storacha-era timestamped listing |
 | [docs/APP-BACKUP.md](docs/APP-BACKUP.md) | an application's backup in one sealed file: several databases, a keyring header, kept on Aleph from the browser, restored by merging |
 | [docs/LIVE-BACKUP.md](docs/LIVE-BACKUP.md) | increments between two full backups: what was written since the last one, shipped as one small CAR, with nobody clicking and no peer online |
 | [SVELTE-COMPONENTS.md](SVELTE-COMPONENTS.md) | the browser components — older than this repository's copy of them; [docs/STORACHA-UI-HISTORY.md](docs/STORACHA-UI-HISTORY.md) records what each piece could do and where it went |

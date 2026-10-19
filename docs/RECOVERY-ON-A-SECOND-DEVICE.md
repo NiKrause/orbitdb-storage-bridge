@@ -54,7 +54,6 @@ under, which nobody has to write down.
 ```js
 import { restoreIdentityFromAuthenticator } from '@le-space/orbitdb-identity-provider-webauthn-did'
 import { hydrate } from '@le-space/orbitdb-storage-bridge/dehydrate'
-import { ALEPH_GATEWAYS } from '@le-space/orbitdb-storage-bridge/backends/aleph'
 
 const restored = await restoreIdentityFromAuthenticator()   // same key, same DID
 
@@ -63,9 +62,6 @@ const { db, address } = await hydrate({
   seed: restored.signingKey,
   label: 'mesh-todo',
   open: { sync: false },         // a node without pubsub needs this
-  // The backup went to Aleph, and only Aleph has it the moment it lands. The
-  // default list starts with Storacha's gateways and does not include Aleph's.
-  restore: { gateways: ALEPH_GATEWAYS },
 })
 ```
 

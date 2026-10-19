@@ -5,32 +5,29 @@ Storacha switched off writes on 2026-05-15 and the service is now gone (the evid
 can take the backend slot. Everything below was checked on **2026-09-05**; prices and API shapes move,
 so re-check before committing to one.
 
-## 1. What the backend slot actually has to do
+## 1. What the backend slot has to do
 
-The Storacha surface this library uses is small. Every call site, from `lib/` and `src/`:
-
-| What                      | Call                                                                   | Sites |
-| ------------------------- | ---------------------------------------------------------------------- | ----- |
-| Write                     | `client.uploadFile()`                                                  | 4     |
-| Discovery                 | `client.capability.upload.list()`, `client.capability.blob.list()`     | 4     |
-| Delete                    | `client.capability.upload.remove()`, `client.capability.blob.remove()` | 2     |
-| Identity & delegated auth | `addSpace`, `setCurrentSpace`, `currentSpace`, `addProof`, `agent.did` | 25    |
-
-Around that sits ~7.4k lines of OrbitDB work — block extraction, `zdpu*`↔`bafkre*` CID bridging, CAR
-packing, identity and access-controller preservation, courier-sync — none of which cares who stores
-the bytes. So the requirements for a replacement are:
+The storage half of this library is small, and the contract in `lib/backends/types.js` is the whole
+of it: `putBlob` and `getBlob`; `pinCid` where a service can fetch from IPFS itself; `list` and
+`remove` where it offers them; and a `capabilities` object, so the bridge picks a strategy instead
+of guessing. Around that sits the OrbitDB work — block extraction, `zdpu*`↔`bafkre*` CID bridging,
+CAR packing, identity and access-controller preservation, courier-sync — none of which cares who
+stores the bytes. What a backend has to give:
 
 1. **Byte-exact round trip.** The whole point of the library is that a restored database has the same
    block CIDs and the same identity. A backend that re-chunks content and hands back _its_ CID breaks
    that; a backend that stores an opaque blob (our CAR) and returns it unchanged does not.
-2. **Node.js and browser.** The Svelte components run in the browser.
-3. **Listing.** Restore currently discovers what exists by listing the space.
+2. **Node.js and browser.** The pages in `examples/svelte/` run in the browser.
+3. **A way to find a backup again.** Restore finds one by CID, by the IPNS pointer `pointer-ipns`
+   derives from a secret, or by asking the service: `listAlephStores` on Aleph, `list()` where a
+   driver offers it.
 4. **Retrieval without the writer.** Disaster recovery means the machine that wrote the backup is gone.
-5. **Delegated, time-bounded auth**, if the UCAN roadmap (v0.7.x) is to survive in some form.
+5. **Delegated auth**, so a key in a browser signs and an account pays — Aleph's `security`
+   aggregate (`createAlephAuthorizer`), Pinata's presigned URLs and scoped keys.
 
-Note (1) and the existing CAR path in `lib/backup-car.js` / [CAR-BACKUP.md](CAR-BACKUP.md) together:
-**the CAR-based backup is the migration-ready one**, because a CAR is an opaque blob to the backend and
-a full block store to us. The per-block upload path is the one that constrains backend choice.
+Note (1) and the CAR path in `lib/backup-car.js` / [CAR-BACKUP.md](CAR-BACKUP.md) together: **the
+CAR is the unit of every backup**, because a CAR is an opaque blob to the backend and a full block
+store to us. The per-block upload path is the one that constrains backend choice.
 
 ## 2. Filecoin Onchain Cloud — Synapse SDK
 
@@ -72,7 +69,7 @@ keeps a fixed **30-day prepaid lockup** — fall below it and the provider may s
   per block would be absurd anyway. CAR-only, in practice.
 - **On-chain write path.** Every backup is a transaction: a wallet, FIL for gas, and a confirmation
   wait. "Incremental backup after each database mutation" (README use case 3) becomes a per-mutation
-  gas cost. Batching, or a pointer-record scheme like the v0.4.4 roadmap item, stops being an
+  gas cost. Batching, or a pointer record like the one `pointer-ipns` publishes, stops being an
   optimisation and becomes a requirement.
 - **Fixed cost floor.** ~$1.44/year per data set before a single byte is stored. Irrelevant at 1 TB,
   dominant for a 5 MB database.
@@ -87,7 +84,7 @@ keeps a fixed **30-day prepaid lockup** — fall below it and the provider may s
 
 - **PDP turns "is my backup still there?" into an on-chain question.** Storacha never offered that, and
   for a disaster-recovery library it is the single most valuable property on this page.
-- **Session keys** are a real analogue of the UCAN delegation roadmap: ephemeral keys registered in a
+- **Session keys** are a real analogue of the delegation this library wants: ephemeral keys registered in a
   `SessionKeyRegistry` contract, scoped to specific permissions (EIP-712 type hashes, custom hashes
   allowed), with an expiry (SDK default 1 hour). Capability + expiry + delegation, on-chain instead of
   in a UCAN chain.
@@ -116,9 +113,10 @@ Filecoin deals in perpetuity. Roughly **$2–5/GB, once**.
 
 - **CAR upload exists**: `uploadCAR()` posts to `/api/v0/dag/import`, a Kubo-shaped DAG import, so the
   blocks inside keep their CIDs. Content stays IPFS-addressed and gateway-retrievable.
-- `getUploads()` replaces `upload.list()`; `deleteFile()` replaces `upload.remove()`.
-- **IPNS is built in** (`ipns --generate-key`, `--publish`) — the v0.4.4 "latest-backup pointer" and
-  the IPNS-based head discovery in the restore roadmap would come for free instead of being built.
+- `getUploads()` replaces `upload.list()`; `deleteFile()` replaces `upload.remove()` — the driver's
+  `list()` and `remove()`.
+- **IPNS is built in** (`ipns --generate-key`, `--publish`) — the pointer `pointer-ipns` publishes
+  through the key it derives would come from the service instead of being built.
 - Access control by wallet address (`share-file`, `revoke-access`) on top of Kavach threshold
   encryption, plus token-gated conditions. Not UCAN, but a working delegation story for _reads_.
 - PODSI proofs, `dealStatus`, an alternative Walrus/Sui backend, an S3-compatible API.
@@ -126,7 +124,7 @@ Filecoin deals in perpetuity. Roughly **$2–5/GB, once**.
 **Limitations**
 
 - **API-key bearer auth.** No delegation of write capability, no DID-based identity, nothing that maps
-  onto the UCAN roadmap. The browser is not excluded, though: `getApiKey(publicKey, signedMessage)`
+  onto a scoped, revocable grant. The browser is not excluded, though: `getApiKey(publicKey, signedMessage)`
   posts to `/api/auth/create_api_key`, so each user mints **their own** key by signing with their own
   wallet — no shared secret has to be shipped. What is lost is scope and expiry: the key is an
   unscoped, long-lived bearer credential for the whole account (upload, delete, list, IPNS), so an XSS
@@ -162,7 +160,8 @@ an expired plan as `UNSUPPORTED`, not as a bad key.
 The only candidate with a **pin-by-CID** endpoint, which for this library is the interesting one:
 `pinata.upload.public.cid(cid)` returns `{ id, cid, status: "prechecking" | "retrieving" }` — the
 service goes and fetches the content from the IPFS network. We already run Helia, so no bytes move
-through a vendor API and hash preservation stops being something a service could get wrong.
+through a vendor API and hash preservation stops being something a service could get wrong. The
+driver deletes through `remove()`, by file id, with the JWT.
 
 **The delegation story is the best on this page.** Not UCAN, but real:
 
@@ -280,6 +279,67 @@ Measured on 2026-10-03 against `api2.aleph.im`, with throwaway accounts and 2 Mi
 - **Listing by the owner.** `messages.json?owners=<account>` finds every STORE kept for an account,
   a delegate's included; `addresses=` matches the sender and misses those. `listAlephStores` wraps
   this, so a page can find a backup by the paying account's public address alone.
+
+### Forgetting
+
+A STORE is paid for by the day until a FORGET releases it. The FORGET is a message, not a call on the
+file: it names the STOREs' item hashes, is signed by the paying account or by a delegate whose grant
+includes `FORGET`, and is irreversible — the file has to be stored again. That is why the Aleph
+driver says `deletion: false`: `remove()` by handle is not what Aleph offers, and the driver holds
+no key that could sign one. `createAlephForget` and `forgetAlephStores` in `backends/aleph-pin` are
+where it lives; Pinata and Lighthouse delete through their drivers' `remove()`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as Application
+    participant F as aleph-pin<br/>forgetAlephStores
+    participant List as listAlephStores
+    participant Forget as createAlephForget → forget(hashes, reason)
+    participant Key as signer<br/>sign(address, payload)
+    participant API as api2.aleph.im
+    participant Wait as waitForMessage
+
+    App->>Forget: createAlephForget({ sender, owner?, sign, channel })
+    App->>F: forgetAlephStores({ owner, channel, ref?, forget, keep?, reason?, batch: 50, settle? })
+    loop pages of 100, until the API's total is reached
+        F->>List: listAlephStores({ owner, channel, ref?, pagination: 100, page })
+        List->>API: GET /api/v0/messages.json?owners=&msgTypes=STORE&channels=&refs=
+        API-->>List: { messages[], pagination_total }
+        List-->>F: stores[{ cid, itemHash, time }]
+    end
+    F->>F: kept = stores.filter(keep); targets = the rest, as item hashes
+    loop batches of `batch` item hashes
+        F->>Forget: forget(hashes, reason)
+        Forget->>Forget: buildForgetMessage → content { address: owner ?? sender, time, hashes, reason? }
+        Forget->>Key: sign(sender, "ETH\n<sender>\nFORGET\n<item_hash>")
+        Key-->>Forget: signature
+        Forget->>API: POST /api/v0/messages { message, sync: true }
+        API-->>Forget: 200/202 { message_status }
+        Forget-->>F: { itemHash, status }
+        opt status === "pending"
+            F->>Wait: waitForMessage(itemHash, settle)
+            Wait->>API: GET /api/v0/messages/{itemHash}, every 2 s, until processed | rejected | timeout
+            API-->>Wait: { status, error_code?, details? }
+            Wait-->>F: final
+        end
+        alt processed
+            F->>F: forgotten += hashes
+        else rejected
+            F->>F: rejected += { itemHash, errorCode }
+        else still pending when time ran out
+            F->>F: pending += { itemHash, forget, status }
+        end
+        F-->>App: onProgress({ done, total })
+    end
+    F-->>App: { forgotten[], kept[], rejected[], pending[], failed[] }
+    Note over API: the forgotten STOREs' files are unpinned and stop costing credits; a FORGET from another account is rejected
+```
+
+`forgotten` holds only what Aleph confirmed; `pending` what it had not decided in time, for the
+caller to follow by item hash; `failed` a batch that could not be sent. Never forget without a
+`keep` that spares the newest full backup: [LIVE-BACKUP.md](LIVE-BACKUP.md) "Deleting an archive"
+and [APP-BACKUP.md](APP-BACKUP.md) "Replacing an old backup" show the two callers.
 
 ## 7. Your own relay
 
@@ -436,42 +496,36 @@ the backend, `hydrate` wraps the fetcher, and a caller wiring the pieces by hand
 | dedup                             | gone. A fresh IV each time means two backups of an unchanged database share nothing                                                           |
 | verification                      | unchanged. Blocks are checked against their CIDs **after** decryption, which is what keeps a stranger's bytes safe                            |
 
-## 9. Recommendation
+## 9. What was decided
 
-1. **Extract the backend interface before picking a backend.** `putBlob` / `getBlob` / `list` /
-   `remove`, plus an optional `pinCid` for the class-1 backends and a `capabilities` object so the
-   bridge picks a strategy instead of hardcoding one. The May 2026 lesson is that the backend is the
-   volatile part of this library; right now it is spread across 35 call sites in
-   `lib/orbitdb-storacha-bridge.js`, `lib/backup-car.js` and `lib/ucan-bridge.js`.
-2. **Make the CAR path the default.** It is the only path that survives a minimum piece size, and the
-   only one where "the backend never sees our CIDs" makes hash preservation structural rather than a
-   property we hope a service preserves.
-3. **Prefer pin-by-CID wherever it exists.** Pinata's `upload.public.cid` and Aleph's STORE-with-ipfs
+1. **The CAR is the default.** It is the only path that survives a minimum piece size, and the only
+   one where "the backend never sees our CIDs" makes hash preservation structural rather than a
+   property we hope a service preserves. `backupDatabase` asks the backend's capabilities
+   (`assertCanTakeBlocks`) before a per-block backup rather than guessing.
+2. **Pin by CID wherever it exists.** Pinata's `upload.public.cid` and Aleph's STORE with the `ipfs`
    engine let us publish through Helia and ask the service to hold what is already ours. It is the
    only class of backend that cannot silently change our hashes, and the cheapest one to authorise
    from a browser. On Pinata it needs a paid plan (measured 2026-09-17).
-4. **Three drivers, three failure domains.** Pinata for reach and the best delegation primitives
-   available, Aleph for keyless browser ingest and because your own tooling already speaks it, FOC
-   for the one property none of the others have — an on-chain answer to "is my backup still there?".
-   Lighthouse when a small archive should be paid for once and forgotten.
-5. **Keep the peers primary, and the user's own relay above any vendor.**
+3. **Three drivers, three failure domains.** Aleph for keyless browser ingest, credits and the
+   owner-pays delegation (section 6); Pinata for reach and the best delegation primitives on this
+   page; Lighthouse when a small archive should be paid for once and forgotten. FOC stays evaluated,
+   not built: the one property none of the others have — an on-chain answer to "is my backup still
+   there?" — has not been worth a wallet per backup yet.
+4. **The peers stay primary, and the user's own relay above any vendor.**
    [`relay-button`](https://github.com/NiKrause/relay-button) and
    [`orbitdb-relay-pinner`](https://github.com/NiKrause/orbitdb-relay-pinner) are what made the 504s
    at the top of this page survivable at all. A paid backend is the third copy, not the copy.
+5. **The UCAN work stays Storacha-shaped.** `lib/ucan-bridge.js` is not exported and
+   `@storacha/client` is an optional peer since 0.22.0; the delegation this library has is Aleph's
+   `security` aggregate — scoped to a channel and revocable, not time-bounded — and Pinata's
+   capability-plus-expiry URLs.
 
-The phased plan built on this is [issue 54](https://github.com/NiKrause/orbitdb-storage-bridge/issues/54), kept out of
+The phased plan built on this was [issue 54](https://github.com/NiKrause/orbitdb-storage-bridge/issues/54), kept out of
 this page so a stale plan cannot be mistaken for a fact.
 
-**Open questions to measure before committing**
+**Still to measure**
 
-- ~~Whether Pinata accepts a CAR at all.~~ Answered 2026-09-17: as a plain file, yes, on the free
-  plan — see the table in section 5.
 - The FOC per-operation provider fee, at the backup frequency we actually want.
 - Whether a CAR round-trips byte-identically through Lighthouse's `dag/import` — verify by CID, not
   by trusting the API.
-- What Aleph storage costs on a current account; the 3 MB-per-ALEPH figure is from 2022 and the
-  credits model has moved since.
 - Session keys in the browser: can one authorise a whole backup session without a popup per piece?
-- Whether anything of the UCAN work (`lib/ucan-bridge.js`, 921 lines) is portable, or whether it was a
-  Storacha-shaped feature that dies with Storacha. The nearest survivors are FOC session keys and
-  Pinata presigned URLs — both capability-plus-expiry, neither a UCAN.

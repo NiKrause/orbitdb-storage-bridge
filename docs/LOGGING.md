@@ -28,3 +28,9 @@ The logger supports printf-style formatting:
 - `%p` - peer ID
 - `%b` - base58btc encoded data
 - `%t` - base32 encoded data
+
+## What does not log
+
+The newer modules — `restore-cid`, `gateway-fetch`, `peer-fetch`, `live-backup`, `app-backup` —
+do not write to this logger. They report through their return values and callbacks (`onProgress`,
+`onError`, and a `log` where a function takes one), so `DEBUG` shows nothing from them.
