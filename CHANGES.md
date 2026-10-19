@@ -1,5 +1,15 @@
 # Changes
 
+## Unreleased
+
+### Added
+
+- **A secret scan in CI.** The `secrets` job runs gitleaks 8.30.1 (binary pinned by checksum) over
+  the whole history on every push, pull request and nightly run. `.gitleaks.toml` allows, by hash,
+  the ten Storacha-era commits that carry a dead principal (`recipient-key.txt`, v0.1.15 .. v0.17.0,
+  found in the 2026-10-16 audit) and says why the tags were not rewritten; any other secret fails the
+  build.
+
 ## 0.21.0 (2026-10-17)
 
 ### Added
