@@ -98,7 +98,7 @@ ref })` forgets one chain and no other. An application can now keep several chai
     and a few hashes per database; the set of shipped hashes is rebuilt from them by walking the
     log once.
   - **One upload, one STORE.** The CAR's root is a dag-cbor manifest
-    (`{ kind: "increment", v: 1, sequence, base, previous, metadata }`). Every increment carries
+    (`{ kind: "increment", v: 1, sequence, base, previous, createdAt, metadata }`). Every increment carries
     each database's manifest and access controller and the identity of every writer it has entries
     from, so a complete chain restores without a base. It goes through any backend's `putBlob`;
     a handle that says `retained: false` is followed by `pinCid`. Sealing is `withEncryption`

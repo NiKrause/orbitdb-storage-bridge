@@ -108,9 +108,10 @@ state.
 ## What outlives Storacha
 
 - **A UCAN instead of a DID for write access.** `UCANOrbitDBAccessController.js` is the
-  one piece that is not about Storacha at all, and the [roadmap](../ROADMAP.md)
-  still carries it as v0.7.0.
+  one piece that is not about Storacha at all; the [roadmap](../ROADMAP.md) listed it with a
+  version number until 2026-09-26 and carries it unticked under Open, as "UCAN 1.0".
 - **Restoring from a CID.** `lib/restore-cid.js` and `lib/gateway-fetch.js` verify every
   block against its CID, so they work from any source that serves the bytes.
-- **The backend seam.** `lib/backends/` now holds Aleph, Pinata, Lighthouse, an in-memory
-  driver and Storacha, so the storage half has somewhere to go.
+- **The backend seam.** `lib/backends/` holds the contract (`types`), the drivers — `aleph`,
+  `aleph-pin`, `pinata`, `lighthouse`, `memory`, `storacha` — and the wrappers `mirror`,
+  `encryption`, `choose` and `resolve`, so the storage half has somewhere to go.

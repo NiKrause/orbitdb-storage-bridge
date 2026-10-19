@@ -33,10 +33,11 @@ accumulated years of posts, replication time grows with it, and archival stops b
    and WebSocket transports. libp2p has fallbacks, and a restore path that is only an HTTP fetch or a
    CID on IPFS is another one. `courier-sync` goes further: replication over any byte courier, down to
    a LoRa mesh with no IP path at all.
-4. **Access control and delegation** — the Storacha era used UCAN for time-bound, delegable access.
-   What the current backends offer instead is compared in
-   [STORAGE-BACKENDS.md](STORAGE-BACKENDS.md); Pinata's presigned upload URLs are the closest thing
-   still shipping.
+4. **Access control and delegation** — a key in the browser that signs, and an account that pays
+   and can take the grant back. On Aleph that is the paying account's `security` aggregate
+   (`createAlephAuthorizer` in `backends/aleph-pin`): one key authorised for STORE, or FORGET, on
+   one channel, revocable, not time-bounded. Pinata's presigned URLs and scoped keys are the other
+   delegation primitive; the comparison is in [STORAGE-BACKENDS.md](STORAGE-BACKENDS.md).
 
 ## How a backup works
 
@@ -47,10 +48,14 @@ accumulated years of posts, replication time grows with it, and archival stops b
    the load-bearing decision: the backend sees a single opaque blob, so nothing it does with
    chunking or codecs can change the CIDs inside it. The alternative — one upload per block — only
    works on a backend that stores the bytes it is given under the CID we computed, and requires it
-   to accept objects as small as an OrbitDB entry. `chooseBackupStrategy` asks the backend rather
-   than guessing.
+   to accept objects as small as an OrbitDB entry. `backupDatabase` asks the backend's capabilities
+   (`assertCanTakeBlocks`) rather than guessing.
 3. **Hand it to the backend.** `putBlob` for the CAR and its metadata; `pinCid` where the backend
    can fetch from IPFS itself, which moves no bytes through a vendor API at all.
+
+Two shapes build on this. [APP-BACKUP.md](APP-BACKUP.md) puts several databases, sealed, into one
+file with a keyring header; [LIVE-BACKUP.md](LIVE-BACKUP.md) ships what was written since the last
+backup as one small increment, with nobody clicking. Each has a sequence diagram.
 
 ## How a restore works
 

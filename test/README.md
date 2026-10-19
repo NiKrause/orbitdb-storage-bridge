@@ -1,90 +1,56 @@
 # Tests
 
-This folder contains automated tests for OrbitDB Storage Bridge. The suites
-cover integration flows, CAR-based backups, network download behavior, and
-edge-case handling.
+Every suite is Jest (`npm test` runs them all, with `--experimental-vm-modules`). None needs a
+credential or the network unless its row says so; the live ones skip themselves without their switch.
 
-## Integration Tests (`test/integration.test.js`)
+## OrbitDB, offline
 
-Validates end-to-end backup and restore flows for OrbitDB databases using
-Storacha. Highlights include:
+| Suite | What it proves | Runs as |
+| --- | --- | --- |
+| `integration.test.js` | backup and restore end to end: CID mappings, key-value and documents with deletes, identity and access controller intact | `npm run test:integration` |
+| `backup-car.test.js`, `car-storage.test.js`, `backup-car-browser.test.js` | the CAR path: packing, storage, and a browser's stand-ins for Node's streams | `npm run test:car-backup` |
+| `timestamped-backup.test.js` | two files per backup, found by content in a listing | `npm run test:timestamped-backup` |
+| `network-download.test.js` | a block from the IPFS network, and the gateway fallback | `npm run test:network-download` |
+| `restore-cid.test.js` | a database from a CID, with no Storacha client anywhere | `npm test -- test/restore-cid.test.js` |
+| `restore-from-blocks.test.js` | several databases in one backup, and back | |
+| `restored-can-write.test.js` | the restored device writes, and the original takes it | |
+| `extract-identity-blocks.test.js` | where a backup finds the identity that signed the entries | |
+| `backup-bundle.test.js` | what a browser pays to back up | |
+| `dehydrate.test.js`, `pointer-ipns.test.js` | a database where a second device finds it, with nothing but a key | |
+| `courier-sync.test.js` | replication over a byte courier | |
+| `live-backup.test.js` | increments: what was written since the last one, and the restore from a chain | |
+| `app-backup.test.js` | an application's backup in one sealed file, and back | |
+| `gateway-fetch.test.js`, `peer-fetch.test.js` | fetching by CID: a gateway that is wrong rather than down; peers instead of a gateway | |
+| `access-control-integration.test.js`, `p256-ucan-security.test.js` | UCAN access control and P-256 UCANs, Storacha-era | `npm run test:p256-ucan` |
+| `ipns-restore.test.js` | restore by IPNS, Storacha-era | |
+| `storage-probe.test.js` | the probe page names the endpoints it talks to, and so does its code | |
 
-- Full backup + restore with CID mappings (fast, deterministic restore).
-- Mapping-independent restore from space (space scan + manifest discovery).
-- Key-value and documents databases with DEL operations.
-- Identity and access-controller preservation checks.
+## Backends
 
-By default, tests use the **in-memory Storacha service**. To run against
-production Storacha, set:
+`npm run test:backends` runs `test/backends/`:
 
-```bash
-USE_PRODUCTION_STORACHA=1 STORACHA_KEY=... STORACHA_PROOF=... npm run test:integration
-```
+| Suite | What it proves |
+| --- | --- |
+| `conformance.test.js` | one contract for every driver, listed in `drivers.js`; the load-bearing test is the CAR round trip, and a capability a driver lacks skips rather than fails |
+| `restore.test.js` | the other half of the contract: a database, not just its bytes |
+| `car-first.test.js` | a CAR by default, and the refusals that make it worth it |
+| `choose.test.js` | a backend from a name and a key — what a page has |
+| `encryption.test.js` | a backup the service holding it cannot read |
+| `mirror.test.js` | what a mirror promises across several services, and what it does not |
+| `aleph-pin.test.js` | the STORE: what gets signed and what is never seen; the owner's authorizations; listing by owner and `ref`; waiting for a decision; FORGET |
+| `pinata.test.js`, `lighthouse.test.js` | what each driver refuses to be, what it sends, how it reads |
 
-## Network Download Tests (`test/network-download.test.js`)
+The Storacha driver in the table runs against the in-memory upload-api in `helpers/`; the service
+it imitates shut down on 2026-05-15, so `USE_PRODUCTION_STORACHA` has nothing left to reach.
 
-Exercises IPFS network download behavior and gateway fallback paths, including:
+## Live, opt-in
 
-- `downloadBlockFromIPFSNetwork` using UnixFS DAG traversal.
-- `downloadBlockFromStoracha` with network-first and gateway fallback.
-- `restoreFromSpaceCAR` for CAR-based backups over network/gateway.
+| Switch | What runs |
+| --- | --- |
+| `ALEPH_LIVE=true` | `backends/aleph-live.test.js`: the Aleph driver against the real host |
+| `PINATA_LIVE=true` with `PINATA_JWT` (and `PINATA_GATEWAY`) | the live Pinata driver joins the conformance table; `backends/pinata-live.test.js` checks pin-by-CID, the full check only with `PINATA_PAID_PLAN=true` |
+| `LIGHTHOUSE_LIVE=true` with `LIGHTHOUSE_API_KEY` | the live Lighthouse driver joins the conformance table |
+| `GATEWAYS_LIVE=true` | `gateway-live.test.js`: are the gateways we default to still serving |
 
-These tests also run **in-memory by default** (same switch as above).
-
-## CAR Backup Tests (`test/backup-car.test.js`, `test/car-storage.test.js`)
-
-Validates CAR-based backup/restore behavior and storage persistence. Includes
-fallback/compat checks and file-level storage behaviors.
-
-## Timestamped Backup Tests (`test/timestamped-backup.test.js`)
-
-Validates timestamped CAR backups in a Storacha space:
-
-- Builds a CAR from the full OrbitDB snapshot (manifest, log entries,
-  access controller, identity blocks).
-- Uploads exactly two files per backup:
-  - `backup-<timestamp>-blocks.car` (the data snapshot)
-  - `backup-<timestamp>-metadata.json` (manifest + spaceName + entry counts)
-- Lists all uploads in the space and **discovers metadata files by content**
-  because Storacha returns CIDs only (no filenames).
-- Restores by selecting the latest metadata entry, then fetching the CAR CID
-  referenced by that metadata.
-
-Runs **in-memory by default**. To run against production Storacha:
-
-```bash
-USE_PRODUCTION_STORACHA=1 STORACHA_KEY=... STORACHA_PROOF=... npm run test:timestamped-backup
-```
-
-## Backend Conformance (`test/backends/conformance.test.js`)
-
-One suite every storage backend driver must pass, so that adding Pinata, Lighthouse,
-Aleph or Filecoin Onchain Cloud is a day of work rather than a rewrite. Drivers are
-listed in a table at the top of the file; each brings itself up and tears itself down.
-
-Runs with **no credentials and no network**: the memory driver is in-process, and the
-Storacha driver runs against the in-memory upload-api in `test/helpers/`.
-
-The load-bearing test is the CAR round trip — a backup is only restorable if every
-inner CID survives the trip, and that is what makes a CAR the safe unit to hand a
-backend. Capability-gated tests skip rather than fail: a backend that cannot list is a
-real backend, not a broken one.
-
-```bash
-npm run test:backends
-```
-
-## Other Suites
-
-- `test/access-control-integration.test.js`: UCAN access control flows.
-- `test/ipns-restore.test.js`: IPNS-related restore scenarios.
-- `test/p256-ucan-security.test.js`: P-256 UCAN security tests.
-
-## Running Tests
-
-```bash
-npm test
-npm run test:integration
-npm run test:car-backup
-npm run test:network-download
-```
+[`.github/workflows/live-backends.yml`](../.github/workflows/live-backends.yml) runs these four on
+demand, and on a pull request labelled `live-backends`. Use keys you can revoke.

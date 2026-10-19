@@ -29,11 +29,13 @@ Where this browser side came from, what it could do, and where every piece of it
 
 **Location:** [`src/components/StorachaAuth.svelte`](src/components/StorachaAuth.svelte)
 
+Not importable from the published package: the `./StorachaAuth.svelte` export points into a `dist/` that no build produces ([docs/STORACHA-UI-HISTORY.md](docs/STORACHA-UI-HISTORY.md)).
+
 Authentication component supporting multiple Storacha authentication methods:
 
 - Storacha credentials (Storacha-Key and Storacha Proof)
 - UCAN authentication (delegated UCAN + corresponding temporary private key)
-- WebAuthN/Passkey (P-256) UCANs and delegation (planed)
+- WebAuthN/Passkey (P-256) UCANs and delegation (planned)
 
 ## StorachaTest.svelte
 
@@ -84,21 +86,23 @@ WebAuthn DID Provider for OrbitDB - Complete identity provider implementation:
 
 **Location:** [`src/components/StorachaIntegration.svelte`](src/components/StorachaIntegration.svelte)
 
+Not importable from the published package, for the same reason as `StorachaAuth.svelte` above.
+
 Full integration component for existing OrbitDB Svelte applications:
 
 - Hash and identity preserving backup/restore (full database reconstruction)
 - Progress tracking with real-time upload/download indicators
 - LocalStorage credential management with auto-login
 - Space management (create, list, select Storacha spaces)
-- Note: Currently has browser limitations for full hash preservation ([Issue #4](../../issues/4))
+- Note: Currently has browser limitations for full hash preservation ([issue 4](https://github.com/NiKrause/orbitdb-storage-bridge/issues/4))
 
 ## Svelte App Demos
 
-In the examples/svelte diretory you find three simple to advanced OrbitDB-Storacha examples.
+`examples/svelte/` holds three examples, none of which needs Storacha:
 
 - simple-backup-restore (Alice creates a db and backs it up to Aleph, Pinata or Lighthouse - Bob restores it into his own - no replication)
 - orbitdb-replication (Alice and Bob replicate one database through a relay, and back it up to Aleph, Pinata or Lighthouse; both may write)
-- ucan-delegation (P-256 UCAN's were not supported by Storacha's upload service; the example left the mainline on 2025-11-23 and lives on the branch [`feature/ucan-delegation-example`](https://github.com/NiKrause/orbitdb-storage-bridge/tree/feature/ucan-delegation-example/examples/svelte/ucan-delegation) — see [docs/STORACHA-UI-HISTORY.md](docs/STORACHA-UI-HISTORY.md))
+- recovery (a list, a security key and a device that has lost everything: `dehydrate`/`hydrate` from a passkey alone — [README](examples/svelte/recovery/README.md))
 
 ## Live Demo
 

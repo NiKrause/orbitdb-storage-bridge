@@ -45,6 +45,65 @@ The CAR goes through any `StorageBackend`'s `putBlob`. A backend whose handle sa
 it with `pinCid`. Sealing is the caller's, through `withEncryption` around the backend; nothing here
 changes for it.
 
+### What a flush does
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as Application
+    participant DB as OrbitDB database<br/>(events, log)
+    participant LB as live-backup<br/>createLiveBackup
+    participant St as state store<br/>{ load, save }
+    participant CI as collectIncrement
+    participant Enc as withEncryption(backend)
+    participant AL as backends/aleph
+    participant Ingest as ipfs.aleph.cloud<br/>/api/v0/add
+    participant Pin as aleph-pin pin()
+    participant API as api2.aleph.im
+
+    App->>LB: createLiveBackup({ databases, backend, after, settle, every, state, blocks?, keep: true })
+    LB->>DB: events.on("update")
+    App->>LB: start()
+    LB->>St: load() → { v, sequence, base, previous, databases[address].heads }
+    LB->>DB: walk the log once from the persisted heads → the set of shipped hashes
+    Note over LB: with `after` or `every` set, one flush is scheduled after `settle`, so a backlog ships
+
+    App->>DB: put / add — never waits
+    DB-->>LB: "update" → pending++
+    alt pending >= after
+        LB->>LB: one timer, fires `settle` ms after the last update
+    else every > 0
+        LB->>LB: a timer every `every` ms flushes while something is pending
+    end
+
+    LB->>LB: flush() — one in flight; a second request runs after it
+    LB->>App: blocks() — the application's own blocks, optional
+    LB->>CI: collectIncrement(watched, { sequence: s+1, base, previous, blocks })
+    loop each watched database
+        CI->>DB: log.heads(), then log.get(hash) back over `next` until a shipped hash
+        CI->>DB: the manifest, the access controller, each new entry, each writer's identity
+    end
+    CI-->>LB: { blocks, manifest { kind: "increment", v: 1, sequence, base, previous, createdAt, metadata }, root } | null
+    LB->>LB: createCARFromBlocks(blocks, root)
+    LB->>Enc: putBlob(car, { name: "increment-000001-<time>.car" })
+    Enc->>AL: putBlob(OSBE envelope)
+    AL->>Ingest: POST /api/v0/add
+    Ingest-->>AL: { Hash }
+    AL-->>LB: handle { id, retained: false }
+    opt keep && handle.retained === false && backend.pinCid
+        LB->>AL: pinCid(handle.id, { name })
+        AL->>Pin: pin(cid) → STORE signed, with `ref` if the pin was given one
+        Pin->>API: POST /api/v0/messages { message, sync: true }
+        API-->>Pin: { message_status: processed | pending }
+        Pin-->>LB: kept { itemHash, status }
+        LB->>App: confirm(kept, handle) — optional; a settled "rejected" fails the flush
+    end
+    LB->>LB: sequence = s+1, previous = handle.id, heads per database, shipped ∪= hashes
+    LB->>St: save(state) — plain JSON
+    LB-->>App: onShipped({ sequence, handle, kept?, entries, blocks, bytes, at })
+    Note over LB,API: on any throw: failures++, lastError, onError(error); the state is untouched, so the next flush ships everything still pending
+```
+
 ## Watching
 
 ```js
@@ -87,6 +146,13 @@ await live.start();
   `failures`, `running`.
 - `blocks` is a function (or a Map) of blocks of the application's own to carry in the next
   increment — receipt files, for an application that keeps them beside its databases.
+- `name`: `(sequence, at) => string` names the blob; the default is
+  `increment-000001-<time>.car`, the sequence padded to six digits.
+- The persisted state is `{ v, sequence, base, previous, databases: { [address]: { heads } } }`,
+  with `v` = `LIVE_BACKUP_STATE_VERSION` (1). A state written by another version is refused, with
+  a message that says to upgrade, or to clear it and `rebase`.
+- `collectIncrement(watched, { sequence, base, previous, blocks })` is exported for a caller that
+  ships by other means: it returns the blocks, the manifest and the root, or `null`.
 - `stop({ flush: true })` ships once more before stopping.
 
 ## When the backend is unreachable
@@ -142,6 +208,9 @@ blocks }`). Increments are ordered by `sequence`; for each database the heads of
   are missing — an increment skipped in the middle — is reported by `restoreFromBlocks` as a head
   that could not be joined.
 
+The whole path from an empty device, the listing on Aleph included, is the second diagram in
+[APP-BACKUP.md](APP-BACKUP.md#the-restore-both-shapes); its lower branch is this section.
+
 ### Into a database that stays open
 
 `restoreFromIncrements` reopens the database, as `restoreFromBlocks` does, and an application holding
@@ -154,6 +223,7 @@ const { joined, heads } = await joinIncrements(todos, {
   increments,
   blockstore: orbitdb.ipfs.blockstore,
 });
+await live.rebase(); // what came back is not shipped again
 ```
 
 `blockstore` is where the application's own (non-dag-cbor) blocks go; without it they are counted
@@ -197,12 +267,13 @@ const { forgotten, kept, rejected, pending, failed } = await forgetAlephStores({
 FORGET's item hash with `waitForMessage`); `failed` a batch that could not be sent. A FORGET is the
 account's, not the blob's: the driver's `remove` stays unsupported, and a forgotten STORE cannot be
 brought back — the file has to be stored again. Pinata, Lighthouse and the in-process
-driver delete through their `remove`.
+driver delete through their `remove`. The message flow, pagination and the four outcomes:
+[STORAGE-BACKENDS.md](STORAGE-BACKENDS.md#forgetting).
 
 ## What it does not do
 
 - It does not write through: no local write waits for a service. That is the point.
 - It does not fetch: a block this node does not have is not in the increment, and the walk stops at
   what `log.get` cannot read.
-- It does not forget: compaction after a full backup — the FORGET messages for the increments before
-  it — is the application's, since it knows which account holds them.
+- It does not forget by itself: compaction after a full backup is the application's call —
+  `forgetAlephStores` with `keep` sparing the new base, in the section above.
