@@ -2,6 +2,26 @@
 
 ## 0.22.0 (2026-10-19)
 
+### Changed, and worth reading before upgrading
+
+- **`@storacha/client` is an optional peer dependency.** `npm install` no longer brings the 28
+  `@storacha/*`, `@ucanto/*` and `@web3-storage/*` packages; the service shut down on 2026-05-15 and
+  every other backend reached the network without them. The main entry no longer imports the client
+  at load time: `initializeStorachaClient` loads it on first use and, when it is missing, fails with
+  a message that names the package. `backends/storacha` still imports it statically and needs it
+  installed. Everything else — Aleph, Pinata, Lighthouse, live backup, app backup, restore — is
+  unchanged.
+- `@storacha/capabilities`, `@ipld/dag-ucan` and `dotenv` were dependencies that only tests and
+  examples used; they are devDependencies now. `lib/backup.js`, a Storacha-era placeholder that
+  nothing imported, is gone.
+- `exports["."].types` pointed at a `.d.ts` that was never built or published; the field is removed
+  rather than promising TypeScript consumers a file they never got.
+- Lockfile: `shell-quote` 1.12.0 (GHSA-pqg4-j6r4-53mv, the one critical advisory) and `devalue` 5.9.4,
+  both within their declared ranges. `npm audit --omit=dev` goes from 20 to 18, the rest being the
+  `helia → @libp2p/webrtc@6 → react-native-webrtc → react-native → metro` chain (7 advisories, code
+  that never loads outside React Native; `@libp2p/webrtc` 7 made it an optional peer, and the
+  chain ends when Helia moves to it), `node-forge` behind AutoTLS and `braces` behind `it-glob`.
+
 ### Added
 
 - **A secret scan in CI.** The `secrets` job runs gitleaks 8.30.1 (binary pinned by checksum) over
