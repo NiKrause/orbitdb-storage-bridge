@@ -1,5 +1,20 @@
 # Changes
 
+## Unreleased
+
+### Fixed
+
+- **The Storacha driver no longer breaks a consumer's bundle.** 0.22.0 made `@storacha/client` an
+  optional peer and loaded it lazily in the main entry, but `backends/storacha.js` still imported it
+  statically — and `resolve.js` reaches that driver by `import()`, which Vite and Rollup follow into a
+  chunk and type-check at build time. An application without the package failed to build with
+  `"Signer" is not exported by "__vite-optional-peer-dep:@storacha/client/…"` (Le-Space/belege, on
+  `app-backup`). The client is now imported in one place only, `lib/storacha-client.js`,
+  dynamically; the driver and the main entry call it on first use, and
+  `test/no-static-storacha-import.test.js` fails the suite if a static import comes back. Verified
+  with a Vite build of `app-backup`, `live-backup`, `backup-car` and `aleph-pin` against the packed
+  tarball with no Storacha package installed.
+
 ## 0.22.0 (2026-10-19)
 
 ### Changed, and worth reading before upgrading
