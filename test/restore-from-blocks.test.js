@@ -118,6 +118,56 @@ describe("restoreFromBlocks", () => {
     expect(bob.libp2p.getConnections()).toHaveLength(0);
   });
 
+  test("writes each entry into one log storage, not into every database's", async () => {
+    const { blocks, metadata } = await bundleDatabases(dbs);
+    const readBack = await readBlocksFromCAR(await createCARFromBlocks(blocks, metadata.manifestCID));
+
+    // Its own node: restoring into one the other tests use would hand them a
+    // database that is already complete.
+    const dave = await createHeliaOrbitDB("-bundle-dave", OFFLINE);
+    const puts = [];
+    const realOpen = dave.orbitdb.open.bind(dave.orbitdb);
+    dave.orbitdb.open = async (...args) => {
+      const db = await realOpen(...args);
+      if (!db.log.storage.__counted) {
+        const realPut = db.log.storage.put.bind(db.log.storage);
+        db.log.storage.put = async (hash, bytes) => {
+          puts.push({ address: db.address, hash });
+          return realPut(hash, bytes);
+        };
+        db.log.storage.__counted = true;
+      }
+      return db;
+    };
+
+    try {
+      await restoreFromBlocks(dave.orbitdb, readBack, metadata, { open });
+
+      // The property that matters: no block reaches more than one database.
+      // Writing every block into every database — what this used to do — puts
+      // all of them into all three (issue #152). Joining a head writes its own
+      // entry again, so the count per database is not fixed; the spread is.
+      const addressesPerHash = new Map();
+      for (const { hash, address } of puts) {
+        if (!addressesPerHash.has(hash)) addressesPerHash.set(hash, new Set());
+        addressesPerHash.get(hash).add(address);
+      }
+      expect([...addressesPerHash.values()].every((addresses) => addresses.size === 1)).toBe(true);
+      expect(new Set(puts.map((p) => p.address)).size).toBe(metadata.databases.length);
+      expect(addressesPerHash.size).toBeLessThanOrEqual(metadata.totalEntries);
+
+      expect(await contents(dave.orbitdb, metadata)).toEqual({
+        events: ["buy milk", "fix the antenna"],
+        keyvalue: ["light"],
+        documents: [{ _id: "p1", name: "Ada" }],
+      });
+    } finally {
+      dave.orbitdb.open = realOpen;
+      await dave.orbitdb?.stop?.();
+      await dave.helia?.stop?.();
+    }
+  });
+
   test("metadata that states no heads: each log's own are found in the blocks", async () => {
     const { blocks, metadata } = await bundleDatabases(dbs);
     const withoutHeads = {
