@@ -43,6 +43,7 @@
     "test:timestamped-backup": "npm test -- test/timestamped-backup.test.js",
     "test:network-download": "npm test -- test/network-download.test.js",
     "test:backends": "npm test -- test/backends/",
+    "test:no-secrets": "npm test -- --forceExit --testPathIgnorePatterns '/node_modules/' '/examples/' '/dist/' '/coverage/' 'test/integration\\.test\\.js' 'test/backup-car\\.test\\.js' 'test/p256-ucan-security\\.test\\.js' 'test/timestamped-backup\\.test\\.js' 'test/network-download\\.test\\.js' 'test/access-control-integration\\.test\\.js'",
     "clear-space": "node examples/storacha/clear-space.js",
     "car-demo": "node examples/storacha/car-backup-demo.js",
     "ucan-demo": "node examples/storacha/ucan-demo.js",
