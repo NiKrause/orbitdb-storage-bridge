@@ -61,10 +61,12 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
-      # courier-sync is the suite downstream projects depend on; the storage
-      # backends ship in the package too, so they gate it as well.
+      # The same set CI runs, named by exclusion in package.json: courier-sync,
+      # which downstream projects depend on, the storage backends that ship in
+      # the package, and everything else that needs no secret — so a suite
+      # added later gates the release without being listed here again.
       - name: Run the tests that need no secrets
-        run: npx jest test/courier-sync.test.js test/car-storage.test.js test/restore-cid.test.js test/restore-from-blocks.test.js test/app-backup.test.js test/backends/ --forceExit
+        run: npm run test:no-secrets
         env:
           NODE_OPTIONS: "--experimental-vm-modules --no-warnings"
 
@@ -129,7 +131,7 @@ jobs:
 
       - name: Run the tests that need no secrets
         if: github.event_name == 'push'
-        run: npx jest test/courier-sync.test.js test/car-storage.test.js test/restore-cid.test.js test/restore-from-blocks.test.js test/app-backup.test.js test/backends/ --forceExit
+        run: npm run test:no-secrets
         env:
           NODE_OPTIONS: "--experimental-vm-modules --no-warnings"
 
