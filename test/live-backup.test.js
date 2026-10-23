@@ -21,6 +21,7 @@ import { createMemoryBackend } from "../lib/backends/memory.js";
 import { withEncryption } from "../lib/backends/encryption.js";
 import { defineBackend } from "../lib/backends/types.js";
 import { bundleDatabases } from "../lib/extract-blocks.js";
+import { entryDatabaseId } from "../lib/restore-cid.js";
 import {
   createLiveBackup,
   readIncrement,
@@ -594,6 +595,55 @@ describe("increments", () => {
     await continuing.stop();
     await expect(joinIncrements(mine, { increments: [] })).rejects.toThrow();
     await theirs.close();
+    await live.stop();
+  });
+
+  test("a chain carrying two databases does not write one's entries into the other", async () => {
+    const store = new Map();
+    const backend = createMemoryBackend({ store });
+    const books = await alice.orbitdb.open("live-two-books", { type: "keyvalue", ...open });
+    const notes = await alice.orbitdb.open("live-two-notes", { type: "keyvalue", ...open });
+    const live = createLiveBackup({ databases: [books, notes], backend });
+    for (let i = 0; i < 3; i++) {
+      await books.put(`b${i}`, i);
+      await notes.put(`n${i}`, i);
+    }
+    await live.flush();
+
+    for (const [name, { bytes }] of (await bundleDatabases([books, notes])).blocks) {
+      await dave.helia.blockstore.put(CID.parse(name), bytes);
+    }
+    const theirBooks = await dave.orbitdb.open(books.address, { type: "keyvalue", ...open });
+
+    // Count what reaches this one database's log storage.
+    const written = [];
+    const realPut = theirBooks.log.storage.put.bind(theirBooks.log.storage);
+    theirBooks.log.storage.put = async (hash, bytes) => {
+      written.push(bytes);
+      return realPut(hash, bytes);
+    };
+
+    const result = await joinIncrements(theirBooks, {
+      increments: await incrementsIn(backend, store),
+    });
+
+    // The other database's entries stayed out: a chain merged for several
+    // databases carries all of them, and writing every one into every database
+    // multiplies the writes (#152).
+    expect(result.skippedForeign).toBeGreaterThan(0);
+    const foreign = written.filter((bytes) => {
+      const id = entryDatabaseId(bytes);
+      return id !== null && id !== String(books.address);
+    });
+    expect(foreign).toHaveLength(0);
+
+    // And this database is complete.
+    expect(await theirBooks.get("b0")).toBe(0);
+    expect(await theirBooks.get("b2")).toBe(2);
+    expect(result.joined).toBeGreaterThanOrEqual(1);
+
+    theirBooks.log.storage.put = realPut;
+    await theirBooks.close();
     await live.stop();
   });
 
