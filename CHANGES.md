@@ -1,5 +1,26 @@
 # Changes
 
+## Unreleased
+
+### Fixed
+
+- **A restore that cannot store its blocks now says so, instead of failing two minutes later about
+  something else.** `restoreFromBlocks` put every block into the blockstore, warned about the ones
+  that would not go in, and carried on. A browser whose storage quota is spent refuses most of them,
+  the log then looks for heads that are not there, waits each one out on the network — about twenty
+  seconds per head, with no peer to answer — and ends with `Entry's id (undefined) doesn't match the
+log's id`, which names neither the cause nor the remedy. It now throws `BlocksNotStoredError`
+  immediately, carrying `stored`, `total` and the first few refusals. Measured in Le-Space/belege's
+  recovery bench: a 3.7 MB backup of 2 016 blocks, of which the browser took 516 before every
+  further write failed with `QuotaExceededError` (#152).
+
+### Added
+
+- `restoreFromBlocks` takes `beforeJoin`: a callback run once every block is in the blockstore and
+  before any database is opened. An application that must close its own handles for the restore —
+  belege closes its books — had to do it before calling, and so closed them for restores that then
+  refused to start. The refusal now happens first, with the application's databases untouched.
+
 ## 0.23.0 (2026-10-23)
 
 ### Fixed
