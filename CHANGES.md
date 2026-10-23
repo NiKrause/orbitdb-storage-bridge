@@ -4,6 +4,15 @@
 
 ### Fixed
 
+- **A browser restore no longer writes the whole backup once per block.** `CarReader` hands out each
+  block as a view into the single `ArrayBuffer` the CAR lives in, and IndexedDB's structured clone
+  persists _the buffer behind a view_, not the view. So restoring a 3.7 MB backup of 2 016 blocks
+  asked the browser for 3.7 MB per block — about 7.5 GB — and it refused everything past roughly
+  block 500 with `QuotaExceededError`. Reproduced outside any application: 2 016 blocks written as
+  standalone copies cost 4 MB and all went in; the same bytes written as views into one buffer cost
+  1 862 MB and stopped at block 494. `readBlocksFromCAR` now hands out bytes that own their buffer,
+  and the three places that write bytes to storage copy a view before doing so. This is why 500
+  bookings restored and 2 000 never did: not a size cliff, a ceiling at about 500 blocks (#152).
 - **A restore that cannot store its blocks now says so, instead of failing two minutes later about
   something else.** `restoreFromBlocks` put every block into the blockstore, warned about the ones
   that would not go in, and carried on. A browser whose storage quota is spent refuses most of them,
