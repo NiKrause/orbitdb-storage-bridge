@@ -11,7 +11,7 @@
 import { jest, describe, test, expect, beforeAll, afterAll } from "@jest/globals";
 import { IPFSAccessController } from "@orbitdb/core";
 import { bundleDatabases } from "../lib/extract-blocks.js";
-import { restoreFromBlocks, restoreFromCID, readBlocksFromCAR } from "../lib/restore-cid.js";
+import { restoreFromBlocks, restoreFromCID, readBlocksFromCAR, standalone } from "../lib/restore-cid.js";
 import { isValidMetadata } from "../lib/backup-metadata.js";
 import { createCARFromBlocks } from "../lib/backup-car.js";
 import { createHeliaOrbitDB, cleanupOrbitDBDirectories } from "../lib/utils.js";
@@ -91,6 +91,38 @@ describe("bundleDatabases", () => {
 
   test("refuses nothing to bundle", async () => {
     await expect(bundleDatabases([])).rejects.toThrow(/at least one database/);
+  });
+});
+
+describe("blocks own their buffer", () => {
+  // `CarReader` hands out each block as a view into the one ArrayBuffer the
+  // whole CAR lives in, and IndexedDB's structured clone persists the buffer
+  // behind a view rather than the view. A browser restoring a 3.7 MB backup
+  // therefore wrote 3.7 MB per block — about 7.5 GB for 2 016 of them — and
+  // refused everything past roughly block 500 with `QuotaExceededError`. No
+  // test here can see that cost: Node has no IndexedDB, so this asserts the
+  // property that causes it.
+  const isView = (bytes) =>
+    bytes.byteOffset !== 0 || bytes.byteLength !== bytes.buffer.byteLength;
+
+  test("readBlocksFromCAR hands out no views into the whole CAR", async () => {
+    const { blocks, metadata } = await bundleDatabases(dbs);
+    const car = await createCARFromBlocks(blocks, metadata.manifestCID);
+    const readBack = await readBlocksFromCAR(car);
+
+    expect(readBack.size).toBeGreaterThan(1);
+    expect([...readBack].filter(([, { bytes }]) => isView(bytes)).map(([name]) => name)).toEqual([]);
+  });
+
+  test("standalone copies a view and leaves bytes that already own their buffer", () => {
+    const whole = new Uint8Array([1, 2, 3, 4, 5, 6]);
+    expect(standalone(whole)).toBe(whole);
+
+    const view = whole.subarray(2, 4);
+    const copy = standalone(view);
+    expect(copy).not.toBe(view);
+    expect([...copy]).toEqual([3, 4]);
+    expect(copy.buffer.byteLength).toBe(2);
   });
 });
 
