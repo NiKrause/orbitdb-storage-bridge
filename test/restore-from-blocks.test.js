@@ -15,6 +15,7 @@ import { restoreFromBlocks, restoreFromCID, readBlocksFromCAR } from "../lib/res
 import { isValidMetadata } from "../lib/backup-metadata.js";
 import { createCARFromBlocks } from "../lib/backup-car.js";
 import { createHeliaOrbitDB, cleanupOrbitDBDirectories } from "../lib/utils.js";
+import { CID } from "multiformats/cid";
 
 jest.setTimeout(180000);
 
@@ -241,5 +242,79 @@ describe("an encrypted database", () => {
     expect(restored.databases[0].joined).toBe(1);
     expect(await restored.databases[0].database.get("amount")).toBe("-12.34");
     await sealed.close();
+  });
+});
+
+describe("a blockstore that will not take the blocks", () => {
+  // Its own node: carol has already been restored into above, and a log that
+  // holds the head already reports it as nothing joined.
+  let dave;
+  beforeAll(async () => {
+    dave = await createHeliaOrbitDB("-bundle-dave", OFFLINE);
+  });
+  afterAll(async () => {
+    await dave?.orbitdb?.stop?.();
+    await dave?.helia?.stop?.();
+  });
+
+  /** How many of these blocks the node's blockstore holds. */
+  async function heldBy(orbitdb, blocks) {
+    let held = 0;
+    for (const cidString of blocks.keys()) {
+      if (await orbitdb.ipfs.blockstore.has(CID.parse(cidString))) held++;
+    }
+    return held;
+  }
+
+  /** Take `n` blocks, then refuse the rest the way a spent browser quota does. */
+  function refuseAfter(orbitdb, n) {
+    const blockstore = orbitdb.ipfs.blockstore;
+    const own = Object.prototype.hasOwnProperty.call(blockstore, "put");
+    const real = blockstore.put.bind(blockstore);
+    let taken = 0;
+    blockstore.put = async (cid, bytes) => {
+      if (taken++ >= n) {
+        const error = new Error("QuotaExceededError");
+        error.name = "PutFailedError";
+        throw error;
+      }
+      return real(cid, bytes);
+    };
+    return () => {
+      if (own) blockstore.put = real;
+      else delete blockstore.put;
+    };
+  }
+
+  test("stops there, rather than leaving the log to wait out the heads it cannot find", async () => {
+    const { blocks, metadata } = await bundleDatabases([dbs.todos]);
+    const closed = [];
+    const undo = refuseAfter(dave.orbitdb, 2);
+    try {
+      await expect(
+        restoreFromBlocks(dave.orbitdb, blocks, metadata, {
+          open,
+          beforeJoin: () => closed.push("closed"),
+        }),
+      ).rejects.toMatchObject({ name: "BlocksNotStoredError", stored: 2, total: blocks.size });
+    } finally {
+      undo();
+    }
+    // And it stops early enough that the caller still holds everything it had:
+    // closing the books for a restore that cannot run is how a browser ends up
+    // on its lock screen with nothing in it.
+    expect(closed).toEqual([]);
+  });
+
+  test("beforeJoin runs once every block is in, and before any database opens", async () => {
+    const { blocks, metadata } = await bundleDatabases([dbs.todos]);
+    const order = [];
+    const restored = await restoreFromBlocks(dave.orbitdb, blocks, metadata, {
+      open,
+      beforeJoin: async () => order.push(`blocks in: ${await heldBy(dave.orbitdb, blocks)}`),
+      onProgress: () => order.push("database opened"),
+    });
+    expect(order).toEqual([`blocks in: ${blocks.size}`, "database opened"]);
+    expect(restored.databases[0].joined).toBe(1);
   });
 });
