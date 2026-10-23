@@ -1,5 +1,36 @@
 # Changes
 
+## 0.23.0 (2026-10-23)
+
+### Fixed
+
+- **A restore no longer writes every block into every database.** `restoreFromBlocks` put each block
+  of the backup into the Helia blockstore — once, correctly — and then, for each database in the
+  metadata, walked the whole block map again and put every block into that database's `log.storage`.
+  That storage reads through to the same blockstore, so the copies were redundant: 2 000 entries in
+  nine databases meant 18 099 writes where 2 011 blocks exist. In Node those writes are cheap; in a
+  browser each is an IndexedDB transaction. An entry names its database in `id`, so each block now
+  reaches one log storage instead of all of them, and a database that gets none is no longer closed
+  and reopened for nothing. Measured in Le-Space/belege's recovery bench, same machine and data:
+  500 bookings 41.4 s → 17.1 s, 50 bookings 1.9 s → 0.8 s, nothing lost (#152, #168).
+- **`joinIncrements` did the same, one level up.** It wrote every dag-cbor block of the merged chain
+  into the one database it was handed, so an application joining nine databases wrote all of their
+  entries nine times — the path incremental backups take. It now skips an entry that names another
+  database. Blocks that are not entries — the manifest, the access controller, an identity — still go
+  in: unlike `restoreFromBlocks` this function has no pass that fills the blockstore first (#170).
+
+### Changed
+
+- `joinIncrements` reports `skippedForeign` when a chain carried entries for other databases.
+- `entryDatabaseId` is exported from `restore-cid.js`: the decision "whose entry is this" now has one
+  answer that both restore paths read.
+
+### Testing
+
+- The control test in `backup-bundle.test.js` guards again — it asserted a static Storacha import the
+  0.22.0 work had removed, and failed on `main` unnoticed because no workflow ran that file. The
+  suites that ran in no job now run in CI (#169).
+
 ## 0.22.1 (2026-10-20)
 
 ### Fixed
