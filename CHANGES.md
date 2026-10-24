@@ -1,5 +1,39 @@
 # Changes
 
+## Unreleased
+
+### Added
+
+- **A second source for a head the backup does not carry.** `restoreFromBlocks` takes `fetchBytes`:
+  anything that returns bytes for a CID, such as `fetchFromGateways` bound to the gateways an
+  application is willing to ask. It is off by default — a restore that reaches the network unasked
+  is not something an offline-first application can allow — and whatever comes back is checked
+  against the CID that asked for it before it is believed, so a gateway is a convenience here and
+  never a party to trust.
+
+- **`requireHeads`** turns a head that cannot be supplied into a `MissingHeadsError`, thrown before
+  `beforeJoin`. An application whose books this restore replaces cannot live with a partial one, and
+  refusing while its databases are still open leaves it with what it had. Off by default: a caller
+  that replicates may well reach the rest another way.
+
+### Fixed
+
+- **A head the blocks lack is named instead of dropped.** `headFrom` returned `null` for a head the
+  backup did not carry and `.filter(Boolean)` threw it away, so a backup missing one came back
+  "restored" with nothing joined and no complaint. `restoreFromBlocks` now returns `missingHeads`.
+  Not an exception: a caller may know the database is reachable another way. Never silence either.
+
+### Changed
+
+- `beforeJoin` now runs after the second source has been asked, not before. Asking can fail, and a
+  caller's books should not already be shut when it does — the same reason the storing pass throws
+  before `beforeJoin` rather than after.
+- `TRUSTLESS_GATEWAYS` no longer names `trustless-gateway.link`. Measured 2026-10-24 it answers
+  `525` to everything, path and trustless alike, so it has followed `ipfs.io` and `dweb.link`
+  (`429`, `sunset: Mon, 21 Sep 2026`) out. Aleph's gateway takes its place: it honours
+  `accept: application/vnd.ipld.raw`, sets the content type to match, and answered in 0.15 s with
+  CORS `*`. The constant is only ever a default; the hash check is what makes an answer usable.
+
 ## 0.24.0 (2026-10-23)
 
 ### Fixed
