@@ -399,14 +399,20 @@ describe("a head the backup does not carry", () => {
     const { blocks, metadata, head, bytes } = await withoutItsHead();
     /** @type {string[]} */
     const asked = [];
+    /** @type {string[]} */
+    const order = [];
     const restored = await restoreFromBlocks(frank.orbitdb, blocks, metadata, {
       open,
+      beforeJoin: () => order.push("books closed"),
       fetchBytes: async (/** @type {string} */ cid) => {
         asked.push(cid);
+        order.push("asked the second source");
         return bytes;
       },
     });
     expect(asked).toHaveLength(1);
+    // Asking can fail, so it happens while the caller still holds everything.
+    expect(order).toEqual(["asked the second source", "books closed"]);
     expect(sameCid(asked[0], head)).toBe(true);
     expect(restored.missingHeads).toEqual([]);
     expect(restored.databases[0].joined).toBe(1);

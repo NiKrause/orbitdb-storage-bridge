@@ -20,6 +20,9 @@
 
 ### Changed
 
+- `beforeJoin` now runs after the second source has been asked, not before. Asking can fail, and a
+  caller's books should not already be shut when it does — the same reason the storing pass throws
+  before `beforeJoin` rather than after.
 - `TRUSTLESS_GATEWAYS` no longer names `trustless-gateway.link`. Measured 2026-10-24 it answers
   `525` to everything, path and trustless alike, so it has followed `ipfs.io` and `dweb.link`
   (`429`, `sunset: Mon, 21 Sep 2026`) out. Aleph's gateway takes its place: it honours
