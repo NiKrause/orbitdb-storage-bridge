@@ -3,7 +3,6 @@
   "version": "0.25.1",
   "description": "Back up, restore and replicate OrbitDB databases through pluggable storage backends, with hash and identity preservation",
   "main": "lib/orbitdb-storacha-bridge.js",
-  "svelte": "dist/components/",
   "type": "module",
   "exports": {
     ".": "./lib/orbitdb-storacha-bridge.js",
@@ -29,8 +28,6 @@
     "./backends/choose": "./lib/backends/choose.js",
     "./backends/resolve": "./lib/backends/resolve.js",
     "./memory-courier": "./lib/memory-courier.js",
-    "./StorachaIntegration.svelte": "./dist/components/StorachaIntegration.svelte",
-    "./StorachaAuth.svelte": "./dist/components/StorachaAuth.svelte",
     "./storacha-backup": "./dist/components/storacha-backup.js",
     "./components/*": "./dist/components/*"
   },
@@ -76,6 +73,8 @@
   "files": [
     "lib",
     "dist",
+    "!dist/components/StorachaAuth.svelte",
+    "!dist/components/StorachaIntegration.svelte",
     "!dist/components/StorachaTest.svelte",
     "!dist/components/StorachaTestWithReplication.svelte",
     "!dist/components/StorachaTestWithWebAuthn.svelte",
