@@ -422,6 +422,20 @@ describe("a head the backup does not carry", () => {
     ]);
   });
 
+  test("requireHeads refuses the restore, and before the books are closed", async () => {
+    const { blocks, metadata } = await withoutItsHead();
+    /** @type {string[]} */
+    const order = [];
+    await expect(
+      restoreFromBlocks(erin.orbitdb, blocks, metadata, {
+        open,
+        requireHeads: true,
+        beforeJoin: () => order.push("books closed"),
+      }),
+    ).rejects.toMatchObject({ name: "MissingHeadsError" });
+    expect(order).toEqual([]);
+  });
+
   test("a second source answering with something else is refused", async () => {
     const { blocks, metadata } = await withoutItsHead();
     const restored = await restoreFromBlocks(erin.orbitdb, blocks, metadata, {

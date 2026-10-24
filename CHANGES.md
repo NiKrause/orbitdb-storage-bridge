@@ -11,6 +11,11 @@
   against the CID that asked for it before it is believed, so a gateway is a convenience here and
   never a party to trust.
 
+- **`requireHeads`** turns a head that cannot be supplied into a `MissingHeadsError`, thrown before
+  `beforeJoin`. An application whose books this restore replaces cannot live with a partial one, and
+  refusing while its databases are still open leaves it with what it had. Off by default: a caller
+  that replicates may well reach the rest another way.
+
 ### Fixed
 
 - **A head the blocks lack is named instead of dropped.** `headFrom` returned `null` for a head the
