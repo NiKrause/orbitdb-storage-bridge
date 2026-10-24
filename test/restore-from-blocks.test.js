@@ -350,3 +350,79 @@ describe("a blockstore that will not take the blocks", () => {
     expect(restored.databases[0].joined).toBe(1);
   });
 });
+
+describe("a head the backup does not carry", () => {
+  // Its own nodes: a node that already holds the log joins nothing new, and
+  // "joined 0" would then mean two different things.
+  let erin;
+  let frank;
+  beforeAll(async () => {
+    erin = await createHeliaOrbitDB("-bundle-erin", OFFLINE);
+    frank = await createHeliaOrbitDB("-bundle-frank", OFFLINE);
+  });
+  afterAll(async () => {
+    for (const side of [erin, frank]) {
+      await side?.orbitdb?.stop?.();
+      await side?.helia?.stop?.();
+    }
+  });
+
+  const sameCid = (/** @type {any} */ a, /** @type {any} */ b) => {
+    try {
+      return CID.parse(String(a)).toV1().toString() === CID.parse(String(b)).toV1().toString();
+    } catch {
+      return false;
+    }
+  };
+
+  /** A backup with its one head taken out of the blocks and kept aside. */
+  async function withoutItsHead() {
+    const { blocks, metadata } = await bundleDatabases([dbs.todos]);
+    const head = metadata.databases[0].heads[0];
+    const key = [...blocks.keys()].find((k) => sameCid(k, head));
+    expect(key).toBeDefined();
+    const bytes = blocks.get(key).bytes;
+    blocks.delete(key);
+    return { blocks, metadata, head, bytes };
+  }
+
+  test("is named rather than quietly dropped", async () => {
+    const { blocks, metadata, head } = await withoutItsHead();
+    const restored = await restoreFromBlocks(erin.orbitdb, blocks, metadata, { open });
+    // The restore itself does not fail: the caller may know another way in.
+    expect(restored.missingHeads).toHaveLength(1);
+    expect(sameCid(restored.missingHeads[0], head)).toBe(true);
+    expect(restored.databases[0].joined).toBe(0);
+  });
+
+  test("is fetched from a second source, checked against its CID, and joined", async () => {
+    const { blocks, metadata, head, bytes } = await withoutItsHead();
+    /** @type {string[]} */
+    const asked = [];
+    const restored = await restoreFromBlocks(frank.orbitdb, blocks, metadata, {
+      open,
+      fetchBytes: async (/** @type {string} */ cid) => {
+        asked.push(cid);
+        return bytes;
+      },
+    });
+    expect(asked).toHaveLength(1);
+    expect(sameCid(asked[0], head)).toBe(true);
+    expect(restored.missingHeads).toEqual([]);
+    expect(restored.databases[0].joined).toBe(1);
+    expect((await restored.databases[0].database.all()).map((/** @type {any} */ e) => e.value)).toEqual([
+      "buy milk",
+      "fix the antenna",
+    ]);
+  });
+
+  test("a second source answering with something else is refused", async () => {
+    const { blocks, metadata } = await withoutItsHead();
+    const restored = await restoreFromBlocks(erin.orbitdb, blocks, metadata, {
+      open,
+      fetchBytes: async () => new Uint8Array([1, 2, 3]),
+    });
+    expect(restored.missingHeads).toHaveLength(1);
+    expect(restored.databases[0].joined).toBe(0);
+  });
+});

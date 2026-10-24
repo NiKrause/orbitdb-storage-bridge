@@ -192,10 +192,17 @@ describe("trustless gateways", () => {
     expect(seen.map((s) => s.accept)).toEqual([RAW_BLOCK, null]);
   });
 
-  test("the trustless list is separate from the default one", () => {
+  test("the trustless list names someone, whoever is left", () => {
+    // It used to be asserted that the two lists share no entry, which held
+    // while `trustless-gateway.link` was alive beside Aleph's. It answered
+    // `525` to everything on 2026-10-24, and the host that is left honours
+    // `accept: application/vnd.ipld.raw` *and* a plain path request, so it
+    // belongs on both lists. The lists differ in what they promise, not in
+    // who happens to be on them — and neither promise is why an answer is
+    // accepted: the hash check is.
     expect(TRUSTLESS_GATEWAYS).not.toHaveLength(0);
     for (const gateway of TRUSTLESS_GATEWAYS) {
-      expect(DEFAULT_GATEWAYS).not.toContain(gateway);
+      expect(gateway).toMatch(/^https:\/\//);
     }
   });
 });
