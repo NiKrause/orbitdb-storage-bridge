@@ -1,5 +1,15 @@
 # Changes
 
+## Unreleased
+
+### Fixed
+
+- **`fetchFromGateways`' JSDoc is back on its function.** It sat two blocks above, separated from it
+  by `matchesRawCid` and that function's own comment, so TypeScript never applied it and inferred
+  `accept` from its `null` default: a caller passing `RAW_BLOCK` — the value the comment itself
+  recommends — was told `string` is not assignable to `null`. The parameter was documented and
+  unusable at once. Missed 0.25.0 by minutes; `accept` is unusable from TypeScript until this ships.
+
 ## 0.25.0 (2026-10-24)
 
 ### Added
