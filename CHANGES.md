@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased
+## 0.26.0 (2026-10-24)
 
 ### Removed
 
