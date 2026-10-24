@@ -1,5 +1,35 @@
 # Changes
 
+## Unreleased
+
+### Removed
+
+- **`StorachaAuth.svelte` and `StorachaIntegration.svelte` are no longer shipped or exported.**
+  Neither has ever built in a consumer. Measured again on 0.25.1: between them they import
+  `dist/lib/logger.js`, `./db-actions.js`, `./libp2p-config.js` and `./p2p.js` — four files no
+  release has ever contained — plus `carbon-components-svelte` and `carbon-icons-svelte`, which
+  the manifest does not declare, and the bare name `orbitdb-storage-bridge`, which is neither a
+  dependency nor this package. The three test harnesses went the same way in #83; these two were
+  left pending a fix-or-drop decision, and the service they drive has not accepted an upload
+  since May 2026. The sources stay in `src/components/`, and `docs/STORACHA-UI-HISTORY.md`
+  records what each piece did. 40 files to 38, 168 kB to 157 kB.
+- The `svelte` field is gone with them. It pointed at `dist/components/`, which now holds no
+  `.svelte` file, and with no matching export condition it made `vite-plugin-svelte` warn in
+  every consumer that built this package.
+
+### Testing
+
+- `package-surface.test.js` reads the manifest: every export points at a file that exists, no
+  `.svelte` is exported, a component that is not exported is not shipped either, and the `svelte`
+  field stays gone. Nothing looked at `exports` before — the suites import `../lib/…` by relative
+  path, which works whatever the manifest says, which is how two broken exports lasted months.
+
+### Changed
+
+- `storacha-backup.js`, `WebAuthnDIDProvider.js` and `theme.js` stay, under `/storacha-backup`
+  and `/components/*`. All three build: none of them imports anything from Node any more, which
+  an older note about `createHash` from `crypto` no longer describes.
+
 ## 0.25.1 (2026-10-24)
 
 ### Fixed

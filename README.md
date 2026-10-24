@@ -74,7 +74,7 @@ entry is the Storacha-era class and the helpers it grew.
 | `/backends/encryption` | `withEncryption`: the service holds ciphertext |
 | `/backends/choose` | `createBackendFromChoice`: a backend from a name and a key, for a page's form |
 | `/backends/resolve` | `resolveBackend`: the options-to-backend step the older functions share |
-| `/StorachaAuth.svelte`, `/StorachaIntegration.svelte`, `/storacha-backup`, `/components/*` | point into a `dist/` that no build produces; not importable ([docs/STORACHA-UI-HISTORY.md](docs/STORACHA-UI-HISTORY.md)) |
+| `/storacha-backup`, `/components/*` | the JavaScript of the old browser widget: `storacha-backup.js`, `WebAuthnDIDProvider.js`, `theme.js`. The two `.svelte` components were dropped — they imported four files no release ever contained ([docs/STORACHA-UI-HISTORY.md](docs/STORACHA-UI-HISTORY.md)) |
 
 ## Install
 

@@ -1,5 +1,14 @@
 # Storacha Svelte Components
 
+> **None of these components ship any more, and none of them ever worked in a consumer.**
+> The three test harnesses went in #83; `StorachaAuth.svelte` and `StorachaIntegration.svelte`
+> followed once it was measured again on 0.25.1 — between them they import four files no
+> release has ever contained, plus two Carbon packages the manifest does not declare. The
+> sources stay in `src/components/` and this page stays with them, because
+> [docs/STORACHA-UI-HISTORY.md](docs/STORACHA-UI-HISTORY.md) cites it. Read that first: it
+> records what each piece did and where it went. What is below describes an intent, not a
+> package you can install.
+
 This document provides detailed documentation for the Svelte components included in the OrbitDB Storage Bridge project for browser-based integration.
 
 ## Table of Contents
