@@ -239,8 +239,16 @@ post to these endpoints:
 | `POST /api/v0/dag/import`                                       | `404`                                                                                                                                                                 |
 | `POST /api/v0/block/put`, `/dag/put`, `/pin/add`, `/cat`, `/id` | `404`                                                                                                                                                                 |
 
-So: **yes, a browser can post to Aleph IPFS directly, with no API key and no proxy.** That answers
-the question this section exists for. Two qualifications, both from the same probe:
+**Measured again on 2026-10-27: every `/api/v0/` call on those hosts answers 404 now** – they serve
+the gateway only. Uploads go to an API node instead, `POST api2.aleph.im/api/v0/ipfs/add_file`:
+no key up to 25 MiB (kept a day, until a STORE names it), and up to 1 GiB with a signed STORE
+message in a `metadata` part beside the file, which the node keeps in the same call after checking
+the signature, the balance and that the CID it made is the one the message names. Its CORS
+preflight answers any origin, so a browser can count the upload. The driver computes the CID
+first, as `ipfs add` does by default; a 16-byte and a 600 KB file gave the node's CID.
+
+So: **yes, a browser can post to Aleph directly, with no API key and no proxy.** That answers
+the question this section exists for. Two qualifications, both from the first probe:
 
 - **Only `add` exists.** No CAR import, no `block/put`, so dag-cbor OrbitDB blocks cannot be written
   with their own CIDs. The CAR goes up as one opaque file and the inner CIDs come back when we import

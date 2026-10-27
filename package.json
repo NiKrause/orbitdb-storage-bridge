@@ -21,6 +21,7 @@
     "./backends/storacha": "./lib/backends/storacha.js",
     "./backends/aleph": "./lib/backends/aleph.js",
     "./backends/aleph-pin": "./lib/backends/aleph-pin.js",
+    "./backends/aleph-upload": "./lib/backends/aleph-upload.js",
     "./backends/pinata": "./lib/backends/pinata.js",
     "./backends/lighthouse": "./lib/backends/lighthouse.js",
     "./backends/mirror": "./lib/backends/mirror.js",
@@ -107,6 +108,7 @@
     "cbor-web": "^10.0.11",
     "datastore-level": "^13.0.1",
     "helia": "^7.1.15",
+    "ipfs-unixfs-importer": "^17.1.1",
     "libp2p": "^3.3.6",
     "multiformats": "^14.0.5"
   },
@@ -141,9 +143,9 @@
     "prettier-plugin-tailwindcss": "^0.7.0"
   },
   "peerDependencies": {
+    "@storacha/client": "^2.0.0",
     "lucide-svelte": ">=0.400.0 <1.0.0",
-    "svelte": "^3.0.0 || ^4.0.0 || ^5.0.0",
-    "@storacha/client": "^2.0.0"
+    "svelte": "^3.0.0 || ^4.0.0 || ^5.0.0"
   },
   "engines": {
     "node": ">=22.0.0"

@@ -16,10 +16,16 @@
 
 import { jest, describe, test, expect } from "@jest/globals";
 import { IPFSAccessController } from "@orbitdb/core";
-import { createAlephBackend, ALEPH_GATEWAYS } from "../../lib/backends/aleph.js";
+import {
+  createAlephBackend,
+  ALEPH_GATEWAYS,
+} from "../../lib/backends/aleph.js";
 import { backupDatabase } from "../../lib/orbitdb-storacha-bridge.js";
 import { restoreFromCID } from "../../lib/restore-cid.js";
-import { createHeliaOrbitDB, cleanupOrbitDBDirectories } from "../../lib/utils.js";
+import {
+  createHeliaOrbitDB,
+  cleanupOrbitDBDirectories,
+} from "../../lib/utils.js";
 
 jest.setTimeout(180_000);
 
@@ -27,7 +33,9 @@ const live = process.env.ALEPH_LIVE === "true";
 const maybe = live ? describe : describe.skip;
 
 if (!live) {
-  console.log("⏭️  Skipping the live Aleph check — set ALEPH_LIVE=true to run it");
+  console.log(
+    "⏭️  Skipping the live Aleph check — set ALEPH_LIVE=true to run it",
+  );
 }
 
 maybe("the real Aleph host, as the driver assumes it", () => {
@@ -48,6 +56,20 @@ maybe("the real Aleph host, as the driver assumes it", () => {
     expect(handle.cid).toBeUndefined();
     expect(handle.retained).toBe(false); // ingest without a wallet keeps nothing
 
+    const back = await backend.getBlob(handle);
+    expect(Buffer.from(back).equals(Buffer.from(bytes))).toBe(true);
+  });
+
+  // Measured 2026-10-27: the IPFS hosts answer `/api/v0/add` with 404, and the
+  // API node takes the file and gives the CID `unixfsCid` computed beforehand.
+  test("the API node takes an unsigned file up to 25 MiB, and its CID is the one computed here", async () => {
+    const { unixfsCid } = await import("../../lib/backends/aleph-upload.js");
+    const backend = createAlephBackend({ ingestUrl: null });
+    const bytes = new Uint8Array(600_000);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 17 + 3) % 256;
+    const handle = await backend.putBlob(bytes, { name: "live-api.bin" });
+    expect(handle.id).toBe(await unixfsCid(bytes));
+    expect(handle.retained).toBe(false);
     const back = await backend.getBlob(handle);
     expect(Buffer.from(back).equals(Buffer.from(bytes))).toBe(true);
   });
@@ -89,10 +111,19 @@ maybe("the real Aleph host, as the driver assumes it", () => {
       expect(backup.method).toBe("car-timestamped");
       const { metadataCID } = backup.backupFiles;
 
-      const restored = await restoreFromCID(target.orbitdb, { metadataCID, gateways: ALEPH_GATEWAYS });
+      const restored = await restoreFromCID(target.orbitdb, {
+        metadataCID,
+        gateways: ALEPH_GATEWAYS,
+      });
       expect(restored.address).toBe(db.address);
-      expect(await restored.database.get("milk")).toEqual({ text: "Hafermilch kaufen", done: false });
-      expect(await restored.database.get("bread")).toEqual({ text: "Brot", done: true });
+      expect(await restored.database.get("milk")).toEqual({
+        text: "Hafermilch kaufen",
+        done: false,
+      });
+      expect(await restored.database.get("bread")).toEqual({
+        text: "Brot",
+        done: true,
+      });
       // Three writes, three entries: the history came back, not only the state.
       expect((await restored.database.log.values()).length).toBe(3);
 
