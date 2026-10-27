@@ -1,5 +1,50 @@
 # Changes
 
+## Unreleased
+
+### Fixed
+
+- **Uploads to Aleph go on now that its IPFS hosts take none.** Since 2026-10-26
+  `ipfs.aleph.cloud`, `ipfs-2.aleph.im` and `ipfs.aleph.im` answer every `/api/v0/` call with
+  404 (the gateway still serves), so `createAlephBackend().putBlob` failed for every caller.
+  The driver still tries the IPFS host first; a 404 or 405 there sends the upload to an API
+  node's `POST /api/v0/ipfs/add_file` (`apiHost`, default `api2.aleph.im`), and the host is
+  not asked again for that backend's lifetime. `ingestUrl: null` skips it from the start.
+  - **Without a signed STORE message** the node takes at most 25 MiB – of the request body,
+    form included (413 at 26.3 MB, measured), so the driver leaves 4 KiB for the form – and
+    keeps the file for a day, until a STORE names it: `retained: false`, as before, and
+    `pinCid` keeps it.
+  - **With a pin that can `sign`** – `createAlephPin` now has `pin.sign(cid, meta)`, the
+    STORE message signed and not sent – the message goes beside the file (`metadata`,
+    `sync: true`), the node keeps the file in the same call, up to 1 GiB, and the handle says
+    `retained: true`, `status`, `itemHash`. No second STORE is needed then. The node checks
+    after pinning that the CID it made is the one the message names, so the driver computes
+    it before the upload (`aleph-upload.js` `unixfsCid`: `ipfs add`'s defaults – CIDv0,
+    dag-pb leaves, 256 KiB chunks, balanced tree; equal to the node's answer for 16 bytes and
+    600 KB, measured 2026-10-27). A signed upload with a throwaway key – for itself, and as a
+    delegate for another account – answered 402, the balance check that comes after the
+    signature's: the message's shape is what the node expects.
+  - A blob above the limit is refused before a byte is sent, with what would help.
+- **Upload progress.** `putBlob(bytes, { onProgress })` reports `(sent, total)` where
+  `XMLHttpRequest` exists (a browser); the API nodes allow the preflight that needs for any
+  origin, the IPFS host did not (aleph-im/pyaleph#1280) – there a refused preflight is sent
+  again without progress, once. Without `XMLHttpRequest` the callback fires once, at the end.
+- **An upload gets its bytes' own time.** The request timeout was two minutes flat, too little
+  for a few hundred MB on a home uplink: it is now the configured `timeout` plus the bytes at
+  100 kB/s – 85 minutes for 500 MB (Le-Space/belege#505).
+
+### Testing
+
+- `test/backends/aleph-api-upload.test.js` against the stub, which now has `add_file` as the
+  node was measured (CID computed as the driver computes it, 422 on a mismatch, 413 above
+  25 MiB without a message, `stores` for what came signed) and `ingestGone()` to answer 404
+  on `add`. The live suite (`ALEPH_LIVE=true`) uploads 600 KB through the API node and
+  compares its CID with the one computed here.
+
+### Dependencies
+
+- `ipfs-unixfs-importer` is declared (it came with `@helia/unixfs` already).
+
 ## 0.26.0 (2026-10-24)
 
 ### Removed

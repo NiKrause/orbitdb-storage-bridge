@@ -25,7 +25,7 @@ Where "somewhere else" is, is a choice:
 
 | Backend | Needs | |
 | --- | --- | --- |
-| `aleph` | nothing | the only backend a browser can write to with no key; ingest only — nothing is kept, listed or deleted here, see `aleph-pin` |
+| `aleph` | nothing; or `aleph-pin`'s pin, to keep in the same call | the only backend a browser can write to with no key; ingest only — nothing is kept, listed or deleted here, see `aleph-pin`. Since Aleph's IPFS hosts stopped taking uploads (2026-10-26) it uploads through an API node: up to 25 MiB with no key, up to 1 GiB with a pin that signs |
 | `aleph-pin` | a signing key: the paying account's, or one it authorised | the signed STORE message that makes Aleph keep it, paid in credits — and the FORGET that releases it |
 | `pinata` | a scoped JWT | pin-by-CID as well as CAR upload |
 | `lighthouse` | an API key | pay once, stored in perpetuity |
@@ -65,8 +65,9 @@ entry is the Storacha-era class and the helpers it grew.
 | `/memory-courier` | `createMemoryCourierPair`: the in-process courier for tests and demos |
 | `/backends/types` | the contract: `defineBackend`, `BackendError`, the capability flags |
 | `/backends/memory` | the in-process driver |
-| `/backends/aleph` | `createAlephBackend`: ingest to Aleph's IPFS with no key; nothing kept, listed or deleted here |
+| `/backends/aleph` | `createAlephBackend`: ingest to Aleph – its IPFS host, else an API node – with no key, or with `aleph-pin`'s pin to keep in the same call; `onProgress` for the upload |
 | `/backends/aleph-pin` | `createAlephPin`, `createAlephAuthorizer`, `listAlephStores`, `waitForMessage`, `createAlephForget`, `forgetAlephStores`: what makes Aleph keep a file, and lets it go |
+| `/backends/aleph-upload` | `unixfsCid`: the CID Aleph gives a file, before the upload; `postFile`, the limits and the upload errors |
 | `/backends/pinata` | Pinata: pin by CID or upload, with a scoped JWT; `remove()` by file id |
 | `/backends/lighthouse` | Lighthouse: upload with an API key; `list()` and `remove()` |
 | `/backends/storacha` | the Storacha driver; needs the optional peer `@storacha/client`, and a service that no longer answers |
