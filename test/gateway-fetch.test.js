@@ -334,3 +334,56 @@ describe("progress as the bytes arrive", () => {
     expect(Array.from(bytes)).toEqual(Array.from(BYTES));
   });
 });
+
+describe("the timeout is idle time, not the whole transfer", () => {
+  /** A body that delivers `parts` with `gapMs` between them. */
+  const slow = (parts, gapMs) => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    body: {
+      getReader: () => {
+        let i = 0;
+        return {
+          read: async () => {
+            await new Promise((r) => setTimeout(r, gapMs));
+            return i < parts.length
+              ? { done: false, value: parts[i++] }
+              : { done: true, value: undefined };
+          },
+        };
+      },
+    },
+    arrayBuffer: async () => {
+      throw new Error("streamed");
+    },
+  });
+
+  test("a transfer longer than the timeout goes through as long as bytes keep coming", async () => {
+    const parts = [
+      BYTES.subarray(0, 1),
+      BYTES.subarray(1, 2),
+      BYTES.subarray(2, 3),
+      BYTES.subarray(3),
+    ];
+    // 4 chunks × 30 ms = 120 ms in all, against a 60 ms timeout.
+    const { fetchStub } = stubFetch({ "gw.test": slow(parts, 30) });
+    const bytes = await fetchFromGateways(CID, {
+      gateways: ["https://gw.test/ipfs"],
+      fetchImpl: fetchStub,
+      timeout: 60,
+    });
+    expect(Array.from(bytes)).toEqual(Array.from(BYTES));
+  });
+
+  test("a transfer that stalls for the timeout is given up, and the error says so", async () => {
+    const { fetchStub } = stubFetch({ "gw.test": slow([BYTES], 200) });
+    await expect(
+      fetchFromGateways(CID, {
+        gateways: ["https://gw.test/ipfs"],
+        fetchImpl: fetchStub,
+        timeout: 40,
+      }),
+    ).rejects.toThrow(/no bytes from https:\/\/gw.test\/ipfs for 40 ms/);
+  });
+});

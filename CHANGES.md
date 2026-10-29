@@ -13,6 +13,16 @@
   2026-10-29: `content-length` and `access-control-expose-headers: Content-Length`, ranges
   too). Other drivers may ignore the option.
 
+### Fixed
+
+- **A big download is no longer cut off at two minutes.** `fetchFromGateways`' `timeout`
+  (120 s by default) was an `AbortSignal.timeout` over the whole request, so a 722 MB backup
+  arriving at a phone's Wi-Fi speed was aborted mid-transfer – "Alephs Gateway hat das Backup
+  nicht zurückgegeben" (Le-Space/belege, 2026-10-29) – while a laptop at 10 MB/s just made it.
+  The timeout is idle time now: how long to wait for the first byte, and from then on for the
+  next one; the body is always read as a stream for that. A stall still gives up, with "no
+  bytes from <gateway> for <timeout> ms".
+
 ## 0.27.0 (2026-10-27)
 
 ### Fixed
