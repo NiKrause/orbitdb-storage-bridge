@@ -1,5 +1,23 @@
 # Changes
 
+## Unreleased
+
+### Added
+
+- **A download is checked against what it should be.** `fetchFromGateways(cid, { expectedSize, verify })`:
+  bytes of another length than the caller knows the file has, or that a check of the caller's
+  refuses, are not an answer – the next gateway is asked, and when every gateway fails the error
+  says what came and what was expected. `matchesUnixfsCid(cid, bytes)` (`backends/aleph-upload`)
+  is such a check for a UnixFS CID made with `ipfs add`'s defaults: it builds the DAG again from
+  the bytes, since the bytes themselves hash to nothing a dag-pb CID names. The Aleph driver's
+  `getBlob(handle, { size })` runs both – the size from the handle, the option, or nothing. Until
+  now a dag-pb download was taken as it came: a sealed backup that came back short on a phone
+  failed to open, and nothing told that apart from a wrong key (Le-Space/belege).
+- **The STORE names the file's size.** `buildStoreMessage({ size })`, `createAlephPin`'s
+  `pin.sign(cid, { size })`, and the signed upload through an API node fill `content.size`;
+  `listAlephStores` reports it as `size`, so whoever lists the backups knows how much a download
+  is before it starts, and can refuse one that came back short. Absent on older STOREs.
+
 ## 0.27.1 (2026-10-29)
 
 ### Added

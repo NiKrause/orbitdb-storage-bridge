@@ -248,6 +248,60 @@ describe("what came back is what was asked for", () => {
     expect(await matchesRawCid(CID, BYTES)).toBe(true);
   });
 
+  test("bytes of another length than the file has are refused, and the next gateway is asked", async () => {
+    const calls = [];
+    const fetchImpl = async (url) => {
+      calls.push(String(url));
+      // The second gateway has the whole file.
+      return calls.length === 1
+        ? answer({ body: BYTES.subarray(0, 2) })
+        : answer();
+    };
+    const bytes = await fetchFromGateways(CID, {
+      gateways: ["https://a.example/ipfs", "https://b.example/ipfs"],
+      fetchImpl,
+      sleep: async () => {},
+      expectedSize: BYTES.length,
+    });
+    expect([...bytes]).toEqual([...BYTES]);
+    expect(calls).toHaveLength(2);
+
+    // Every gateway short: the error says what came and what was expected.
+    await expect(
+      fetchFromGateways(CID, {
+        gateways: ["https://a.example/ipfs"],
+        fetchImpl: async () => answer({ body: BYTES.subarray(0, 3) }),
+        sleep: async () => {},
+        expectedSize: BYTES.length,
+      }),
+    ).rejects.toThrow(/served 3 bytes of .* not the 4 it has/);
+  });
+
+  test("a check of the caller's refuses bytes the raw check cannot judge", async () => {
+    const dagPb = "QmXFP7bcUKHowZN2faFrEdiABN1E6raBiRsQbGCtb5Fnwn";
+    const judged = [];
+    const verify = async (cid, bytes) => {
+      judged.push([cid, bytes.length]);
+      return judged.length > 1;
+    };
+    const calls = [];
+    const bytes = await fetchFromGateways(dagPb, {
+      gateways: ["https://a.example/ipfs", "https://b.example/ipfs"],
+      fetchImpl: async (url) => {
+        calls.push(String(url));
+        return answer();
+      },
+      sleep: async () => {},
+      verify,
+    });
+    expect([...bytes]).toEqual([...BYTES]);
+    expect(judged).toEqual([
+      [dagPb, 4],
+      [dagPb, 4],
+    ]);
+    expect(calls).toHaveLength(2);
+  });
+
   test("a CID the check cannot prove passes: dag-pb, dag-cbor, an unparsable string", async () => {
     expect(
       await matchesRawCid(

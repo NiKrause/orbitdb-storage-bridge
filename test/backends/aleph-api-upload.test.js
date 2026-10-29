@@ -22,6 +22,7 @@ import { createAlephPin } from "../../lib/backends/aleph-pin.js";
 import {
   ALEPH_API_UNSIGNED_LIMIT,
   hashFromAddAnswer,
+  matchesUnixfsCid,
   unixfsCid,
   uploadTimeout,
 } from "../../lib/backends/aleph-upload.js";
@@ -217,5 +218,57 @@ describe("the API node, once the IPFS host is gone", () => {
     });
     expect(handle.retained).toBe(false);
     expect(calls).toEqual(["/api/v0/add"]);
+  });
+});
+
+describe("what a download is checked against", () => {
+  test("matchesUnixfsCid builds the DAG again: the file passes, a short or changed one does not", async () => {
+    const bytes = bytesOf(600 * 1024, 3);
+    const cid = await unixfsCid(bytes);
+    expect(await matchesUnixfsCid(cid, bytes)).toBe(true);
+    expect(
+      await matchesUnixfsCid(cid, bytes.subarray(0, bytes.length - 1)),
+    ).toBe(false);
+    const changed = Uint8Array.from(bytes);
+    changed[300 * 1024] ^= 1;
+    expect(await matchesUnixfsCid(cid, changed)).toBe(false);
+    // Nothing it can prove: a raw CID (gateway-fetch's own check), an
+    // unparsable string.
+    expect(
+      await matchesUnixfsCid(
+        "bafkreigh2akiscaildcqabsyg3dfr6chu3fgpregiymsck7e7aqa4s52zy",
+        bytes,
+      ),
+    ).toBe(true);
+    expect(await matchesUnixfsCid("not a cid", bytes)).toBe(true);
+  });
+
+  test("getBlob refuses a gateway's short or damaged answer, and says so", async () => {
+    const bytes = bytesOf(40_000, 5);
+    const cid = await unixfsCid(bytes);
+    const served = { body: bytes.subarray(0, 30_000) };
+    const backend = createAlephBackend({
+      ingestUrl: null,
+      apiHost: "https://api.example",
+      gateways: ["https://short.example/ipfs"],
+      fetch: async () => new Response(served.body, { status: 200 }),
+    });
+    // Short, and the STORE's size known: refused by the length.
+    await expect(
+      backend.getBlob({ id: cid, size: bytes.length }),
+    ).rejects.toThrow(/30000 bytes of .* not the 40000/);
+    // Short, size unknown: refused by the CID built from the bytes.
+    await expect(backend.getBlob(cid)).rejects.toThrow(/not Qm/);
+    // Damaged in the middle, the length right: refused by the CID.
+    const damaged = Uint8Array.from(bytes);
+    damaged[20_000] ^= 0xff;
+    served.body = damaged;
+    await expect(
+      backend.getBlob({ id: cid, size: bytes.length }),
+    ).rejects.toThrow(/not Qm/);
+    // The file itself passes both.
+    served.body = bytes;
+    const back = await backend.getBlob({ id: cid, size: bytes.length });
+    expect(Buffer.from(back).equals(Buffer.from(bytes))).toBe(true);
   });
 });
