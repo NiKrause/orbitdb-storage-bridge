@@ -15,6 +15,10 @@ import {
   BACKEND_KINDS,
 } from "../../lib/backends/choose.js";
 
+// What the gateway stub serves ([7]) under the CID that names it: the Aleph
+// driver builds a UnixFS CID again from the bytes, so a made-up one is refused.
+const CID_OF_SEVEN = await unixfsCid(new Uint8Array([7]));
+
 describe("a backend from a choice", () => {
   test("aleph needs nothing, which is why it is the default anywhere", async () => {
     const backend = await createBackendFromChoice({ kind: "aleph" });
@@ -79,9 +83,7 @@ describe("a backend from a choice", () => {
 describe("the gateway a read goes to", () => {
   // A dag-pb CID: these tests are about which host is asked, and a raw CID
   // would now be checked against the stub's bytes (gateway-fetch, 0.19.0).
-  // What the stub serves ([7]) under the CID that names it: since the Aleph
-  // driver builds a UnixFS CID again from the bytes, a made-up one is refused.
-  const CID = await unixfsCid(new Uint8Array([7]));
+  const CID = CID_OF_SEVEN;
   const realFetch = globalThis.fetch;
   let asked;
 
@@ -116,7 +118,11 @@ describe("the gateway a read goes to", () => {
 
     await backend.getBlob({ id: CID });
 
-    expect(asked.some((url) => url.startsWith("https://silver-fox.mypinata.cloud/ipfs/"))).toBe(true);
+    expect(
+      asked.some((url) =>
+        url.startsWith("https://silver-fox.mypinata.cloud/ipfs/"),
+      ),
+    ).toBe(true);
   });
 
   test("lighthouse reads from the account's own gateway, bare domain and all", async () => {
@@ -130,7 +136,11 @@ describe("the gateway a read goes to", () => {
 
     await backend.getBlob({ id: CID });
 
-    expect(asked.some((url) => url.startsWith("https://preferred-cat.lighthouseweb3.xyz/ipfs/"))).toBe(true);
+    expect(
+      asked.some((url) =>
+        url.startsWith("https://preferred-cat.lighthouseweb3.xyz/ipfs/"),
+      ),
+    ).toBe(true);
   });
 
   test("aleph takes a host and asks it under /ipfs, because its driver tries a list", async () => {
@@ -175,8 +185,16 @@ describe("the gateway a read goes to", () => {
 
     await backend.getBlob({ id: CID });
 
-    expect(asked.some((url) => url.startsWith("https://silver-fox.mypinata.cloud/ipfs/"))).toBe(true);
-    expect(asked.some((url) => url.startsWith("https://preferred-cat.lighthouseweb3.xyz/ipfs/"))).toBe(true);
+    expect(
+      asked.some((url) =>
+        url.startsWith("https://silver-fox.mypinata.cloud/ipfs/"),
+      ),
+    ).toBe(true);
+    expect(
+      asked.some((url) =>
+        url.startsWith("https://preferred-cat.lighthouseweb3.xyz/ipfs/"),
+      ),
+    ).toBe(true);
   });
 
   test("one gateway for several services is refused, not shared out", async () => {
