@@ -114,8 +114,12 @@ export async function createStack({ credential }) {
         // Listening nowhere is still the point: nothing can reach this page,
         // and it announces nothing.
         addresses: { listen: [] },
-        // webRTCDirect because that is what Aleph's node answers on — it has
-        // no wss address at all. webSockets stays for providers that do.
+        // Both, because Aleph answers on both now: it announces
+        // `/dns6/…libp2p.direct/tcp/4001/tls/ws` beside its `webrtc-direct`,
+        // and the former carries no certificate hash, so it survives a restart
+        // that kills the latter. It had no ws address when this line was first
+        // written. Neither helps without IPv6 — every address it announces is
+        // `/ip6/` or `/dns6/`.
         transports: [webSockets(), webRTCDirect()],
         connectionEncrypters: [noise()],
         streamMuxers: [yamux()],

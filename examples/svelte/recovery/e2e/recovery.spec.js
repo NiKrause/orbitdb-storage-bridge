@@ -170,6 +170,15 @@ test("speaks German and English, and has a light and a dark look — both kept",
  *
  * What it proves is the claim in NiKrause/funkpost#127: a phone whose gateways
  * are all unreachable still gets its list back.
+ *
+ * **It needs IPv6.** Aleph's node announces nothing else — every address is
+ * `/ip6/` or `/dns6/` (see `ALEPH_BITSWAP`) — so a browser without a route to
+ * IPv6 cannot reach it at any address, and the claim above is false there
+ * however well this package behaves. Headless Chromium here is such a browser
+ * while the shell beside it has IPv6, which is the kind of difference the
+ * `webrtc-qr` notes mean by "never trust one browser's word about the
+ * network". So the test asks first and skips with the reason rather than
+ * failing on something it cannot change.
  */
 const live = process.env.RECOVERY_LIVE === "true";
 
@@ -180,10 +189,30 @@ test.describe("the peer path", () => {
   );
   test.setTimeout(240_000);
 
+  /**
+   * Can this browser open an IPv6-only host at all?
+   *
+   * A name with only an AAAA record is simply unresolvable to a browser with
+   * no IPv6, which is what `net::ERR_NAME_NOT_RESOLVED` means in that log —
+   * not a broken name. `ipv6.google.com` is the probe rather than a dependency
+   * of anything here: it is IPv6-only and it is up, which is all a probe needs
+   * to be.
+   */
+  const hasIPv6 = async (page) =>
+    page.evaluate(() =>
+      fetch("https://ipv6.google.com/generate_204", { mode: "no-cors" })
+        .then(() => true)
+        .catch(() => false),
+    );
+
   test("the list comes back over libp2p when no gateway will answer", async ({
     page,
   }) => {
     await page.goto("/?fetch=first");
+    test.skip(
+      !(await hasIPv6(page)),
+      "Aleph's node is IPv6-only and this browser has no route to IPv6",
+    );
     await attachSecurityKey(page);
     await enrolPasskey(page);
     // The fingerprints and the log live behind the details toggle.
