@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-/* global location, indexedDB */
+/* global location, indexedDB, crypto */
 /**
  * The stack this page needs, and nothing else.
  *
