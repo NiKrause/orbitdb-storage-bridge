@@ -230,6 +230,13 @@ Two things to know before wiring it up:
   that dials a service it never uploaded to is telling that service what its
   reader is looking for. `PINATA_BITSWAP` and `ALEPH_BITSWAP` are constants;
   `providersFor(cid)` asks a router for anyone else.
+- **Aleph needs IPv6.** Every address its node announces is `/ip6/` or
+  `/dns6/`, so a browser with no route to IPv6 cannot reach it at any of them —
+  and a `/dns6/` name, having only an AAAA record, is not merely unreachable to
+  such a browser but *unresolvable*: Chromium reports `ERR_NAME_NOT_RESOLVED`
+  for a name the shell beside it resolves fine. Measured 2026-10-29, which is
+  why the recovery example's live test asks before it runs. Pinata's `/dns4/`
+  address has no such condition.
 - **Which router knows what.** `cid.contact` is an IPNI index and answers a
   browser with CORS, but it does not know Aleph's CIDs — Aleph announces over
   the DHT, where only `delegated-ipfs.dev` looks, and that one sends no CORS
