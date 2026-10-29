@@ -61,6 +61,17 @@ jobs:
           ALEPH_LIVE: "true"
           NODE_OPTIONS: "--experimental-vm-modules --no-warnings"
 
+      # The peer behind ALEPH_BITSWAP. It went stale without a sound once —
+      # a different peer id, not the rotating certhash the docstring promised —
+      # and the only place it showed was a demo six weeks later. Runs even when
+      # the upload test above failed, because it answers its own question.
+      - name: The constant still names Aleph's node
+        if: success() || failure()
+        run: npx jest test/peer-fetch-live.test.js --forceExit
+        env:
+          PEERS_LIVE: "true"
+          NODE_OPTIONS: "--experimental-vm-modules --no-warnings"
+
   pinata:
     name: Pinata (live)
     if: >-
