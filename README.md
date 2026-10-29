@@ -123,6 +123,7 @@ Galaxy A57 with the same key brought the database back and wrote to it. Source:
 | | |
 | --- | --- |
 | [docs/DESIGN.md](docs/DESIGN.md) | the problem this solves, and how a backup and a restore actually work |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the package from the inside: what the modules under `lib/` are allowed to import, what is loaded late and why, and how to re-derive the graph |
 | [docs/STORAGE-BACKENDS.md](docs/STORAGE-BACKENDS.md) | every backend evaluated — prices, limits, and what has been verified against a live account |
 | [docs/RECOVERY-ON-A-SECOND-DEVICE.md](docs/RECOVERY-ON-A-SECOND-DEVICE.md) | the passkey recovery procedure, step by step |
 | [docs/CAR-BACKUP.md](docs/CAR-BACKUP.md) | the CAR as the unit of every backup, and the Storacha-era timestamped listing |
