@@ -9,6 +9,7 @@
  */
 
 import { jest, describe, test, expect, afterEach } from "@jest/globals";
+import { unixfsCid } from "../../lib/backends/aleph-upload.js";
 import {
   createBackendFromChoice,
   BACKEND_KINDS,
@@ -78,7 +79,9 @@ describe("a backend from a choice", () => {
 describe("the gateway a read goes to", () => {
   // A dag-pb CID: these tests are about which host is asked, and a raw CID
   // would now be checked against the stub's bytes (gateway-fetch, 0.19.0).
-  const CID = "QmXFP7bcUKHowZN2faFrEdiABN1E6raBiRsQbGCtb5Fnwn";
+  // What the stub serves ([7]) under the CID that names it: since the Aleph
+  // driver builds a UnixFS CID again from the bytes, a made-up one is refused.
+  const CID = await unixfsCid(new Uint8Array([7]));
   const realFetch = globalThis.fetch;
   let asked;
 
