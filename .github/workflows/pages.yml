@@ -11,6 +11,9 @@ on:
     branches: [main]
     paths:
       - "examples/browser/**"
+      # The recovery demo is published from here too, and for a year it was not
+      # in this list: a change to it never reached the page.
+      - "examples/svelte/recovery/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -33,6 +36,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: "npm"
+
+      # The demo links the library in this checkout (`file:../../../`), so the
+      # root's own dependencies have to be installed before its build can
+      # resolve them.
+      - name: Install the library the demo links
+        run: npm ci
 
       # The recovery demo is the one example here that needs building: it is a
       # Svelte app, not a static page. Everything under examples/browser/ stays

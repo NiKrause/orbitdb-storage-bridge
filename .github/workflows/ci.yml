@@ -338,14 +338,60 @@ jobs:
           path: examples/svelte/orbitdb-replication/playwright-report/
           retention-days: 30
 
+  # The demo that is published to Pages, and the only one whose suite ran
+  # nowhere: a security key in a virtual authenticator, an identity OrbitDB
+  # takes, and a list that survives being forgotten. Everything stays on the
+  # machine — the arm that really uploads is behind RECOVERY_LIVE.
+  e2e-tests-recovery:
+    name: E2E Tests (recovery)
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install example dependencies
+        run: npm ci
+        working-directory: examples/svelte/recovery
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: examples/svelte/recovery
+
+      # What a tick on the page turns into, before a browser is involved.
+      - name: Run the offline tests - recovery
+        run: npm test
+        working-directory: examples/svelte/recovery
+
+      - name: Run E2E tests - recovery
+        run: npx playwright test
+        working-directory: examples/svelte/recovery
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-recovery
+          path: examples/svelte/recovery/playwright-report/
+          retention-days: 30
+
   notify:
     name: Notify Results
     runs-on: ubuntu-latest
-    needs: [lint, secrets, courier-sync-tests, integration-tests, car-backup-tests, p256-ucan-tests, timestamped-backup-tests, network-download-tests, e2e-tests-simple, e2e-tests-orbitdb]
+    needs: [lint, secrets, courier-sync-tests, integration-tests, car-backup-tests, p256-ucan-tests, timestamped-backup-tests, network-download-tests, e2e-tests-simple, e2e-tests-orbitdb, e2e-tests-recovery]
     if: always()
     steps:
       - name: Notify Success
-        if: needs.lint.result == 'success' && needs.secrets.result == 'success' && needs.courier-sync-tests.result == 'success' && needs.integration-tests.result == 'success' && needs.e2e-tests-simple.result == 'success' && needs.e2e-tests-orbitdb.result == 'success' && needs.car-backup-tests.result != 'failure' && needs.p256-ucan-tests.result != 'failure' && needs.timestamped-backup-tests.result != 'failure' && needs.network-download-tests.result != 'failure'
+        if: needs.lint.result == 'success' && needs.secrets.result == 'success' && needs.courier-sync-tests.result == 'success' && needs.integration-tests.result == 'success' && needs.e2e-tests-simple.result == 'success' && needs.e2e-tests-orbitdb.result == 'success' && needs.e2e-tests-recovery.result == 'success' && needs.car-backup-tests.result != 'failure' && needs.p256-ucan-tests.result != 'failure' && needs.timestamped-backup-tests.result != 'failure' && needs.network-download-tests.result != 'failure'
         run: |
           echo "✅ All tests passed successfully!"
           echo "🎉 OrbitDB Storage Bridge is working correctly"
@@ -359,8 +405,10 @@ jobs:
           echo "  - Timestamped Backup Tests: PASSED"
           echo "  - Network Download Tests: PASSED"
           echo "  - E2E Tests (simple-backup-restore): PASSED"
+          echo "  - E2E Tests (orbitdb-replication): PASSED"
+          echo "  - E2E Tests (recovery): PASSED"
       - name: Notify Failure
-        if: needs.lint.result == 'failure' || needs.secrets.result == 'failure' || needs.courier-sync-tests.result == 'failure' || needs.integration-tests.result == 'failure' || needs.car-backup-tests.result == 'failure' || needs.p256-ucan-tests.result == 'failure' || needs.timestamped-backup-tests.result == 'failure' || needs.network-download-tests.result == 'failure' || needs.e2e-tests-simple.result == 'failure'
+        if: needs.lint.result == 'failure' || needs.secrets.result == 'failure' || needs.courier-sync-tests.result == 'failure' || needs.integration-tests.result == 'failure' || needs.car-backup-tests.result == 'failure' || needs.p256-ucan-tests.result == 'failure' || needs.timestamped-backup-tests.result == 'failure' || needs.network-download-tests.result == 'failure' || needs.e2e-tests-simple.result == 'failure' || needs.e2e-tests-orbitdb.result == 'failure' || needs.e2e-tests-recovery.result == 'failure'
         run: |
           echo "❌ Some tests failed"
           echo "🔍 Please check the logs above for details"
@@ -374,4 +422,6 @@ jobs:
           echo "  - Timestamped Backup Tests: ${{ needs.timestamped-backup-tests.result }}"
           echo "  - Network Download Tests: ${{ needs.network-download-tests.result }}"
           echo "  - E2E Tests (simple-backup-restore): ${{ needs.e2e-tests-simple.result }}"
+          echo "  - E2E Tests (orbitdb-replication): ${{ needs.e2e-tests-orbitdb.result }}"
+          echo "  - E2E Tests (recovery): ${{ needs.e2e-tests-recovery.result }}"
           exit 1

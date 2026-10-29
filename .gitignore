@@ -20,3 +20,7 @@ ucan-bridge-test*
 dist/
 examples/svelte/*/build/
 examples/svelte/*/dist/
+# What Playwright leaves behind. The two SvelteKit examples ignore these in
+# their own .gitignore; the recovery example has none of its own.
+examples/svelte/*/playwright-report/
+examples/svelte/*/test-results/

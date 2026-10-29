@@ -353,11 +353,14 @@
             USB, NFC oder Bluetooth, nicht über das Internet.
           </li>
           <li>
-            <strong>Schritt 3:</strong> <code>POST ipfs.aleph.cloud/api/v0/add</code>, zweimal — die
-            Liste als eine CAR-Datei mit allen Blöcken, aus denen sie besteht, dann ein kleines
-            JSON, das sie benennt. Danach <code>PUT delegated-ipfs.dev/routing/v1/ipns/k51…</code>:
-            ein IPNS-Eintrag, signiert mit dem Zeigerschlüssel, der auf das JSON zeigt, 30 Tage
-            gültig.
+            <strong>Schritt 3:</strong> zwei Uploads — die Liste als eine CAR-Datei mit allen
+            Blöcken, aus denen sie besteht, dann ein kleines JSON, das sie benennt. Zuerst
+            <code>POST ipfs.aleph.cloud/api/v0/add</code>; seit dem 26. Oktober 2026 nimmt dieser
+            Host nichts mehr an und antwortet 404, also geht es weiter an einen API-Knoten,
+            <code>POST api2.aleph.im/api/v0/ipfs/add_file</code> — ohne Signatur bis 25 MiB, einen
+            Tag aufbewahrt, bis eine STORE-Nachricht die Datei benennt. Danach
+            <code>PUT delegated-ipfs.dev/routing/v1/ipns/k51…</code>: ein IPNS-Eintrag, signiert mit
+            dem Zeigerschlüssel, der auf das JSON zeigt, 30 Tage gültig.
           </li>
           <li>
             <strong>Schritt 5:</strong> <code>GET delegated-ipfs.dev/routing/v1/ipns/k51…</code>, und
@@ -413,8 +416,12 @@
             Bluetooth, not over the internet.
           </li>
           <li>
-            <strong>Step 3:</strong> <code>POST ipfs.aleph.cloud/api/v0/add</code>, twice — the list
-            as one CAR file, every block it is made of, then a small JSON that names it. Then
+            <strong>Step 3:</strong> two uploads — the list as one CAR file, every block it is
+            made of, then a small JSON that names it. First
+            <code>POST ipfs.aleph.cloud/api/v0/add</code>; since 26 October 2026 that host takes
+            none and answers 404, so the upload goes on to an API node,
+            <code>POST api2.aleph.im/api/v0/ipfs/add_file</code> — unsigned up to 25 MiB, kept for a
+            day until a STORE message names it. Then
             <code>PUT delegated-ipfs.dev/routing/v1/ipns/k51…</code>: an IPNS record, signed by the
             pointer key, pointing at the JSON, valid for 30 days.
           </li>

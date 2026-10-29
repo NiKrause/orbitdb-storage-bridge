@@ -10,6 +10,8 @@ export default defineConfig({
     command: "npm run build && npm run preview -- --port 4175 --strictPort",
     port: 4175,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    // The build is 35 s on a developer's machine and this is a CI job now, so
+    // the siblings' 300 s rather than a margin that only holds here.
+    timeout: 300_000,
   },
 });

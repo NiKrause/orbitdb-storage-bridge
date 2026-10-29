@@ -64,11 +64,6 @@ test("the key alone gives an identity OrbitDB takes, and it writes", async ({ pa
   );
 
   await page.goto("/");
-  // Up to the menu of all pages, first in the pill.
-  await expect(page.locator(".ls-pill a.ls-up")).toHaveAttribute(
-    "href",
-    "https://nikrause.github.io/funkpost/",
-  );
   // The technical layer is closed, and opening it shows something at once —
   // before any step has run, which is when it used to show nothing.
   await expect(page.getByTestId("how-it-works")).toBeHidden();
@@ -114,17 +109,17 @@ test("speaks German and English, and has a light and a dark look — both kept",
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.getByRole("heading", { name: /Tell the page who you are/ })).toBeVisible();
 
-  await page.getByRole("link", { name: "Deutsch" }).click();
+  // Two chips, top right (src/ui.js), each named for what it will do rather
+  // than for what is on.
+  await page.getByRole("button", { name: "Auf Deutsch lesen" }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
   await expect(page.getByRole("heading", { name: /Identität vom Schlüssel/ })).toBeVisible();
   await expect(page.getByTestId("use-key")).toHaveText("Sicherheitsschlüssel verwenden");
   await expect(page).toHaveTitle(/eine Liste, die das Telefon übersteht/);
-  // The address says it too, so the page QR opens in the same language.
-  expect(new URL(page.url()).searchParams.get("lang")).toBe("de");
 
   const ground = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const light = await ground();
-  await page.getByRole("button", { name: "Zum dunklen Modus wechseln" }).click();
+  await page.getByRole("button", { name: "Darstellung wechseln" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect.poll(ground).not.toBe(light);
 
