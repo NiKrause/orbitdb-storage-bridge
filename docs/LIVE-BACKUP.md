@@ -57,7 +57,7 @@ sequenceDiagram
     participant CI as collectIncrement
     participant Enc as withEncryption(backend)
     participant AL as backends/aleph
-    participant Ingest as ipfs.aleph.cloud<br/>/api/v0/add
+    participant Ingest as ipfs.aleph.cloud /api/v0/add<br/>then api2.aleph.im /api/v0/ipfs/add_file
     participant Pin as aleph-pin pin()
     participant API as api2.aleph.im
 
@@ -76,7 +76,7 @@ sequenceDiagram
         LB->>LB: a timer every `every` ms flushes while something is pending
     end
 
-    LB->>LB: flush() — one in flight; a second request runs after it
+    LB->>LB: flush() — one in flight, a second request runs after it
     LB->>App: blocks() — the application's own blocks, optional
     LB->>CI: collectIncrement(watched, { sequence: s+1, base, previous, blocks })
     loop each watched database
@@ -87,7 +87,7 @@ sequenceDiagram
     LB->>LB: createCARFromBlocks(blocks, root)
     LB->>Enc: putBlob(car, { name: "increment-000001-<time>.car" })
     Enc->>AL: putBlob(OSBE envelope)
-    AL->>Ingest: POST /api/v0/add
+    AL->>Ingest: POST /api/v0/add, and on its 404 the API node's /api/v0/ipfs/add_file
     Ingest-->>AL: { Hash }
     AL-->>LB: handle { id, retained: false }
     opt keep && handle.retained === false && backend.pinCid
@@ -96,12 +96,12 @@ sequenceDiagram
         Pin->>API: POST /api/v0/messages { message, sync: true }
         API-->>Pin: { message_status: processed | pending }
         Pin-->>LB: kept { itemHash, status }
-        LB->>App: confirm(kept, handle) — optional; a settled "rejected" fails the flush
+        LB->>App: confirm(kept, handle) — optional, a settled "rejected" fails the flush
     end
     LB->>LB: sequence = s+1, previous = handle.id, heads per database, shipped ∪= hashes
     LB->>St: save(state) — plain JSON
     LB-->>App: onShipped({ sequence, handle, kept?, entries, blocks, bytes, at })
-    Note over LB,API: on any throw: failures++, lastError, onError(error); the state is untouched, so the next flush ships everything still pending
+    Note over LB,API: on any throw: failures++, lastError, onError(error) — the state is untouched, so the next flush ships everything still pending
 ```
 
 ## Watching
