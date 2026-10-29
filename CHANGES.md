@@ -1,5 +1,18 @@
 # Changes
 
+## Unreleased
+
+### Added
+
+- **Progress while a blob is fetched.** `fetchFromGateways(cid, { onProgress })` and the Aleph
+  driver's `getBlob(handle, { onProgress })` call back with how many bytes have arrived and how
+  many the gateway announced (`Content-Length`, 0 when it did not). The body is then read as a
+  stream; without the callback it is read in one piece, as before. A backup of several hundred
+  MB takes minutes on a phone, and a page could only say "fetching" until the last byte
+  (Le-Space/belege). Aleph's gateway announces the length and exposes it to browsers (measured
+  2026-10-29: `content-length` and `access-control-expose-headers: Content-Length`, ranges
+  too). Other drivers may ignore the option.
+
 ## 0.27.0 (2026-10-27)
 
 ### Fixed

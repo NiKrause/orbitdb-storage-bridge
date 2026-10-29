@@ -258,3 +258,79 @@ describe("what came back is what was asked for", () => {
     expect(await matchesRawCid("not a cid", BYTES)).toBe(true);
   });
 });
+
+describe("progress as the bytes arrive", () => {
+  /** A Response whose body streams `parts`, announcing the whole length. */
+  const streamed = (parts, { announce = true } = {}) => {
+    const total = parts.reduce((n, p) => n + p.length, 0);
+    return {
+      ok: true,
+      status: 200,
+      headers: {
+        get: (name) =>
+          name.toLowerCase() === "content-length" && announce
+            ? String(total)
+            : null,
+      },
+      body: {
+        getReader: () => {
+          let i = 0;
+          return {
+            read: async () =>
+              i < parts.length
+                ? { done: false, value: parts[i++] }
+                : { done: true, value: undefined },
+          };
+        },
+      },
+      arrayBuffer: async () => {
+        throw new Error(
+          "arrayBuffer must not be used when progress is asked for",
+        );
+      },
+    };
+  };
+
+  test("onProgress sees every chunk, with the announced total, and the bytes come back whole", async () => {
+    const parts = [
+      BYTES.subarray(0, 1),
+      BYTES.subarray(1, 3),
+      BYTES.subarray(3),
+    ];
+    const { fetchStub } = stubFetch({ "gw.test": streamed(parts) });
+    const seen = [];
+    const bytes = await fetchFromGateways(CID, {
+      gateways: ["https://gw.test/ipfs"],
+      fetchImpl: fetchStub,
+      onProgress: (received, total) => seen.push([received, total]),
+    });
+    expect(Array.from(bytes)).toEqual(Array.from(BYTES));
+    expect(seen).toEqual([
+      [1, 4],
+      [3, 4],
+      [4, 4],
+    ]);
+  });
+
+  test("a gateway that does not announce the length reports 0 as the total", async () => {
+    const { fetchStub } = stubFetch({
+      "gw.test": streamed([BYTES], { announce: false }),
+    });
+    const seen = [];
+    await fetchFromGateways(CID, {
+      gateways: ["https://gw.test/ipfs"],
+      fetchImpl: fetchStub,
+      onProgress: (received, total) => seen.push([received, total]),
+    });
+    expect(seen).toEqual([[4, 0]]);
+  });
+
+  test("without onProgress the body is read in one piece, as before", async () => {
+    const { fetchStub } = stubFetch({ "gw.test": answer() });
+    const bytes = await fetchFromGateways(CID, {
+      gateways: ["https://gw.test/ipfs"],
+      fetchImpl: fetchStub,
+    });
+    expect(Array.from(bytes)).toEqual(Array.from(BYTES));
+  });
+});
