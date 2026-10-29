@@ -1,3 +1,4 @@
+/* global crypto */
 /**
  * @fileoverview Is the peer we ship as a constant still Aleph's? Opt-in.
  *
