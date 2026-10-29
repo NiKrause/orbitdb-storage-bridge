@@ -85,7 +85,10 @@ describe("asking who holds a CID", () => {
       routerAnswer([
         {
           ID: "12D3KooWaaa",
-          Addrs: ["/ip4/1.2.3.4/tcp/4001", "/ip4/1.2.3.4/udp/4001/webrtc-direct/certhash/uEiA"],
+          Addrs: [
+            "/ip4/1.2.3.4/tcp/4001",
+            "/ip4/1.2.3.4/udp/4001/webrtc-direct/certhash/uEiA",
+          ],
         },
         { ID: "12D3KooWbbb", Addrs: ["/ip4/5.6.7.8/tcp/4001"] },
       ]),
@@ -95,7 +98,9 @@ describe("asking who holds a CID", () => {
 
     expect(found).toHaveLength(1);
     expect(found[0].id).toBe("12D3KooWaaa");
-    expect(found[0].addrs).toEqual(["/ip4/1.2.3.4/udp/4001/webrtc-direct/certhash/uEiA"]);
+    expect(found[0].addrs).toEqual([
+      "/ip4/1.2.3.4/udp/4001/webrtc-direct/certhash/uEiA/p2p/12D3KooWaaa",
+    ]);
   });
 
   test("dialableOnly: false keeps what a Node caller can still use", async () => {
@@ -105,7 +110,29 @@ describe("asking who holds a CID", () => {
 
     const found = await providersFor(CID, { fetchImpl, dialableOnly: false });
 
-    expect(found[0].addrs).toEqual(["/ip4/1.2.3.4/tcp/4001"]);
+    expect(found[0].addrs).toEqual(["/ip4/1.2.3.4/tcp/4001/p2p/12D3KooWaaa"]);
+  });
+
+  test("an address that already names the peer is not given a second /p2p/", async () => {
+    // A router may hand back either shape, and `/p2p/x/p2p/x` dials nothing.
+    const fetchImpl = jest.fn(async () =>
+      routerAnswer([
+        {
+          ID: "12D3KooWaaa",
+          Addrs: [
+            "/dns4/a.example/tcp/443/wss/p2p/12D3KooWaaa",
+            "/dns4/b.example/tcp/443/wss",
+          ],
+        },
+      ]),
+    );
+
+    const found = await providersFor(CID, { fetchImpl });
+
+    expect(found[0].addrs).toEqual([
+      "/dns4/a.example/tcp/443/wss/p2p/12D3KooWaaa",
+      "/dns4/b.example/tcp/443/wss/p2p/12D3KooWaaa",
+    ]);
   });
 
   test("reads a streamed answer, one record per line", async () => {
@@ -114,8 +141,14 @@ describe("asking who holds a CID", () => {
       status: 200,
       text: async () =>
         [
-          JSON.stringify({ ID: "12D3KooWaaa", Addrs: ["/dns4/a.example/tcp/443/wss"] }),
-          JSON.stringify({ ID: "12D3KooWbbb", Addrs: ["/dns4/b.example/tcp/443/wss"] }),
+          JSON.stringify({
+            ID: "12D3KooWaaa",
+            Addrs: ["/dns4/a.example/tcp/443/wss"],
+          }),
+          JSON.stringify({
+            ID: "12D3KooWbbb",
+            Addrs: ["/dns4/b.example/tcp/443/wss"],
+          }),
           "", // a stream ends with one
         ].join("\n"),
     }));
@@ -129,13 +162,18 @@ describe("asking who holds a CID", () => {
     const fetchImpl = jest
       .fn()
       .mockResolvedValueOnce(
-        routerAnswer([{ ID: "12D3KooWaaa", Addrs: ["/dns4/a.example/tcp/443/wss"] }]),
+        routerAnswer([
+          { ID: "12D3KooWaaa", Addrs: ["/dns4/a.example/tcp/443/wss"] },
+        ]),
       )
       .mockResolvedValueOnce(
         routerAnswer([
           {
             ID: "12D3KooWaaa",
-            Addrs: ["/dns4/a.example/tcp/443/wss", "/dns4/b.example/tcp/443/wss"],
+            Addrs: [
+              "/dns4/a.example/tcp/443/wss",
+              "/dns4/b.example/tcp/443/wss",
+            ],
           },
         ]),
       );
@@ -146,7 +184,10 @@ describe("asking who holds a CID", () => {
     });
 
     expect(found).toHaveLength(1);
-    expect(found[0].addrs).toEqual(["/dns4/a.example/tcp/443/wss", "/dns4/b.example/tcp/443/wss"]);
+    expect(found[0].addrs).toEqual([
+      "/dns4/a.example/tcp/443/wss/p2p/12D3KooWaaa",
+      "/dns4/b.example/tcp/443/wss/p2p/12D3KooWaaa",
+    ]);
   });
 
   test("a router that refuses is skipped, not fatal", async () => {
@@ -154,7 +195,9 @@ describe("asking who holds a CID", () => {
       .fn()
       .mockResolvedValueOnce({ ok: false, status: 429, text: async () => "" })
       .mockResolvedValueOnce(
-        routerAnswer([{ ID: "12D3KooWaaa", Addrs: ["/dns4/a.example/tcp/443/wss"] }]),
+        routerAnswer([
+          { ID: "12D3KooWaaa", Addrs: ["/dns4/a.example/tcp/443/wss"] },
+        ]),
       );
 
     const found = await providersFor(CID, {
@@ -256,7 +299,10 @@ describe("fetching over peers", () => {
 
   test("one address failing is fine as long as another answers", async () => {
     const fetchBytes = createPeerFetch({
-      providers: ["/dns4/down.example/tcp/443/wss", "/dns4/up.example/tcp/443/wss"],
+      providers: [
+        "/dns4/down.example/tcp/443/wss",
+        "/dns4/up.example/tcp/443/wss",
+      ],
       dial: async (addr) => {
         if (addr.includes("down")) throw new Error("connection refused");
       },
@@ -267,7 +313,11 @@ describe("fetching over peers", () => {
   });
 
   test("no provider at all says so before dialling anything", async () => {
-    const fetchBytes = createPeerFetch({ providers: [], dial: async () => {}, cat: cat() });
+    const fetchBytes = createPeerFetch({
+      providers: [],
+      dial: async () => {},
+      cat: cat(),
+    });
 
     await expect(fetchBytes(CID)).rejects.toThrow(/No provider to dial/);
   });
