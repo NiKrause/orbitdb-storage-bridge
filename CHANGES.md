@@ -1,5 +1,28 @@
 # Changes
 
+## Unreleased
+
+### Added
+
+- **Progress while a blob is fetched.** `fetchFromGateways(cid, { onProgress })` and the Aleph
+  driver's `getBlob(handle, { onProgress })` call back with how many bytes have arrived and how
+  many the gateway announced (`Content-Length`, 0 when it did not). The body is then read as a
+  stream; without the callback it is read in one piece, as before. A backup of several hundred
+  MB takes minutes on a phone, and a page could only say "fetching" until the last byte
+  (Le-Space/belege). Aleph's gateway announces the length and exposes it to browsers (measured
+  2026-10-29: `content-length` and `access-control-expose-headers: Content-Length`, ranges
+  too). Other drivers may ignore the option.
+
+### Fixed
+
+- **A big download is no longer cut off at two minutes.** `fetchFromGateways`' `timeout`
+  (120 s by default) was an `AbortSignal.timeout` over the whole request, so a 722 MB backup
+  arriving at a phone's Wi-Fi speed was aborted mid-transfer – "Alephs Gateway hat das Backup
+  nicht zurückgegeben" (Le-Space/belege, 2026-10-29) – while a laptop at 10 MB/s just made it.
+  The timeout is idle time now: how long to wait for the first byte, and from then on for the
+  next one; the body is always read as a stream for that. A stall still gives up, with "no
+  bytes from <gateway> for <timeout> ms".
+
 ## 0.27.0 (2026-10-27)
 
 ### Fixed
