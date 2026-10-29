@@ -23,4 +23,13 @@ export default defineConfig({
     nodePolyfills({ include: ["events", "buffer", "process", "util"] }),
   ],
   server: { port: 5178 },
+  resolve: {
+    // The bridge is linked from the repository root (`file:../../../`), so its
+    // files resolve imports from the root, where the polyfill plugin is not
+    // installed — and the plugin adds shim imports to them too. Resolve it
+    // from this example instead. simple-backup-restore needs the same line,
+    // and records that marking the shims external builds but leaves the page
+    // blank, because the browser cannot resolve them either.
+    dedupe: ["vite-plugin-node-polyfills"],
+  },
 });

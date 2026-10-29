@@ -31,7 +31,7 @@ npm install
 npm run dev
 ```
 
-`npm run build` writes a static site to `build/`; `npm run preview` serves it.
+`npm run build` writes a static site to `dist/` — which is what `pages.yml` publishes; `npm run preview` serves it.
 
 ## Where backups go
 

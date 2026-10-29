@@ -216,8 +216,11 @@ export async function backUp({ orbitdb, address, signingKey, services = [{ id: "
   });
 }
 
-/** Gateways retired on 2026-09-21: they answer 429 with a Sunset header. */
-const RETIRED = ["dweb.link", "ipfs.io", "w3s.link", "storacha.link"];
+/**
+ * Gateways that stopped serving: the first four on 2026-09-21, answering 429
+ * with a Sunset header, and `trustless-gateway.link` after them with 525.
+ */
+const RETIRED = ["dweb.link", "ipfs.io", "w3s.link", "storacha.link", "trustless-gateway.link"];
 const isStillServing = (gateway) => !RETIRED.some((host) => gateway.includes(host));
 
 /**
