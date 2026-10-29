@@ -316,7 +316,7 @@ sequenceDiagram
         API-->>List: { messages[], pagination_total }
         List-->>F: stores[{ cid, itemHash, time }]
     end
-    F->>F: kept = stores.filter(keep); targets = the rest, as item hashes
+    F->>F: kept = stores.filter(keep), targets = the rest, as item hashes
     loop batches of `batch` item hashes
         F->>Forget: forget(hashes, reason)
         Forget->>Forget: buildForgetMessage → content { address: owner ?? sender, time, hashes, reason? }
@@ -341,7 +341,7 @@ sequenceDiagram
         F-->>App: onProgress({ done, total })
     end
     F-->>App: { forgotten[], kept[], rejected[], pending[], failed[] }
-    Note over API: the forgotten STOREs' files are unpinned and stop costing credits; a FORGET from another account is rejected
+    Note over API: the forgotten STOREs' files are unpinned and stop costing credits — a FORGET from another account is rejected
 ```
 
 `forgotten` holds only what Aleph confirmed; `pending` what it had not decided in time, for the

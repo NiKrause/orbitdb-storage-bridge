@@ -63,7 +63,7 @@ sequenceDiagram
     participant XB as extract-blocks<br/>bundleDatabases
     participant Enc as the application's encrypt<br/>+ encryption.wrapEnvelope
     participant AL as backends/aleph<br/>createAlephBackend
-    participant Ingest as ipfs.aleph.cloud<br/>/api/v0/add
+    participant Ingest as ipfs.aleph.cloud /api/v0/add<br/>then api2.aleph.im /api/v0/ipfs/add_file
     participant Pin as backends/aleph-pin<br/>createAlephPin
     participant Key as delegate key<br/>sign(address, payload)
     participant API as api2.aleph.im<br/>/api/v0/messages
@@ -73,14 +73,15 @@ sequenceDiagram
     App->>AB: buildAppBackup({ app, databases, encrypt, header?, blocks?, extra?, onProgress? })
     AB->>XB: bundleDatabases(databases, { onProgress })
     XB-->>AB: { blocks (by CID), metadata.databases[{ address, heads, … }] }
-    AB->>AB: own blocks added; manifest { kind: "app-backup", v: 1, app, createdAt, metadata, header: sha256(header)? }
+    AB->>AB: own blocks added, then manifest { kind: "app-backup", v: 1, app, createdAt, metadata, header: sha256(header)? }
     AB->>AB: createCARFromBlocks(blocks, root)
     AB->>Enc: encrypt(car) → { ciphertext, iv }
     Enc-->>AB: wrapEnvelope → "OSBE" | v | iv | ciphertext
     AB-->>App: { bytes: "OSBA" | v | header length | header | envelope, manifest }
 
     App->>AL: putBlob(bytes, { name })
-    AL->>Ingest: POST multipart, no key
+    AL->>Ingest: POST multipart, no key — the IPFS host first
+    Note over AL,Ingest: since 2026-10-26 that host answers 404 to every /api/v0/ call, so the upload goes on to an API node — unsigned up to 25 MiB, kept a day until a STORE names it, or in the same call with the STORE beside the file
     Ingest-->>AL: { Hash: CIDv0 of the UnixFS wrapper }
     AL-->>App: handle { id: Hash, retained: false }
 
@@ -137,23 +138,23 @@ sequenceDiagram
     List->>API: GET ?owners=&msgTypes=STORE&channels=&refs=&pagination=&page=
     API-->>List: { messages[], pagination_total }
     List-->>App: { stores: [{ cid, itemHash, sender, owner, time, payment }], total }
-    Note over App: `owners=` finds a delegate's STORE; `addresses=` would not
+    Note over App: `owners=` finds a delegate's STORE, `addresses=` would not
 
     alt full backup — the newest app-backup STORE
         App->>GW: fetchFromGateways(cid)
         GW->>Aleph: GET
         Aleph-->>App: bytes "OSBA…"
-        App->>AB: readAppBackupHeader(bytes) → { header } — no key; find this passkey's slot
+        App->>AB: readAppBackupHeader(bytes) → { header } — no key, find this passkey's slot
         App->>AB: openAppBackup(bytes, { decrypt, app })
         AB->>AB: readEnvelope → decrypt(ciphertext, iv) → readBlocksFromCAR, every block verified
-        AB->>AB: manifest { kind: "app-backup" }; another app, or a swapped header, is refused
+        AB->>AB: manifest { kind: "app-backup" } — another app, or a swapped header, is refused
         AB-->>App: opened { header, manifest, blocks }
         App->>AB: restoreAppBackup({ orbitdb, opened, addresses, open, onProgress? })
         AB->>RC: restoreFromBlocks(orbitdb, blocks, manifest.metadata, { open })
-        RC->>ODB: blockstore.put per block; orbitdb.open(address, open); log.joinEntry(head) per head
+        RC->>ODB: blockstore.put per block, orbitdb.open(address, open), log.joinEntry(head) per head
         ODB-->>RC: { databases[{ address, joined, entries }] }
         RC-->>AB: result, warnings
-        AB-->>App: throws if a head could not be joined; else { databases[] }
+        AB-->>App: throws if a head could not be joined, else { databases[] }
     else increments — every STORE of the chain, by sequence
         loop each increment
             App->>GW: withEncryption(backend).getBlob(cid) → decrypted CAR
@@ -166,7 +167,7 @@ sequenceDiagram
             RC->>ODB: open, then joinEntry(heads)
         else the books are open on screen
             App->>LB: joinIncrements(database, { base?, increments, blockstore?, allowGaps? })
-            LB->>ODB: log.storage.put(hash, bytes) per dag-cbor block; raw blocks to `blockstore`
+            LB->>ODB: log.storage.put(hash, bytes) per dag-cbor block, raw blocks to `blockstore`
             LB->>ODB: log.get(head) → log.joinEntry(entry) per head
             ODB-->>App: { joined, heads, blocks, gaps, duplicates } — the application reloads its view
             App->>LB: live.rebase() — what came back is not shipped again
