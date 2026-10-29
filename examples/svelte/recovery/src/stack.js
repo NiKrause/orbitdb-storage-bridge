@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-/* global location, indexedDB */
+/* global location, indexedDB, crypto */
 /**
  * The stack this page needs, and nothing else.
  *
@@ -51,7 +51,14 @@ import {
   ALEPH_BITSWAP,
   PINATA_BITSWAP,
 } from "@le-space/orbitdb-storage-bridge/peer-fetch";
-import { createAlephBackend, ALEPH_GATEWAYS } from "@le-space/orbitdb-storage-bridge/backends/aleph";
+import {
+  createAlephBackend,
+  ALEPH_GATEWAYS,
+} from "@le-space/orbitdb-storage-bridge/backends/aleph";
+import {
+  encryptWithAESGCM,
+  decryptWithAESGCM,
+} from "@le-space/orbitdb-identity-provider-webauthn-did/keystore";
 
 /** One label for this demo's pointer, so one key can name other things too. */
 export const LABEL = "funkpost-recovery-demo";
@@ -177,7 +184,9 @@ export const SERVICES = Object.freeze([
  * @param {Array<{id: string, key?: string, gateway?: string}>} chosen
  */
 export async function backendFor(chosen) {
-  const services = chosen.filter((s) => SERVICES.some((known) => known.id === s.id));
+  const services = chosen.filter((s) =>
+    SERVICES.some((known) => known.id === s.id),
+  );
   if (services.length === 0) {
     throw new Error("Pick at least one place for the backup");
   }
@@ -205,14 +214,52 @@ export async function backendFor(chosen) {
   });
 }
 
+/**
+ * The key the backup is encrypted with.
+ *
+ * The same secret as the signing key, under its own info string, as the
+ * bridge's `backends/encryption` asks for: a compromised backup key is then
+ * not a signing key. Both devices derive it from the security key alone, so
+ * the premise of this page survives — nothing is carried over but the key in
+ * your pocket.
+ */
+const BACKUP_INFO = "funkpost-recovery-demo:backup-key:v1";
+
+async function cipher(seed) {
+  const base = await crypto.subtle.importKey("raw", seed, "HKDF", false, [
+    "deriveBits",
+  ]);
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "HKDF",
+      hash: "SHA-256",
+      salt: new Uint8Array(0),
+      info: new TextEncoder().encode(BACKUP_INFO),
+    },
+    base,
+    256,
+  );
+  const sk = new Uint8Array(bits);
+  return {
+    encrypt: (bytes) => encryptWithAESGCM(bytes, sk),
+    decrypt: (ciphertext, iv) => decryptWithAESGCM(ciphertext, sk, iv),
+  };
+}
+
 /** Back the list up and publish the pointer the key's own secret names. */
-export async function backUp({ orbitdb, address, signingKey, services = [{ id: "aleph" }] }) {
+export async function backUp({
+  orbitdb,
+  address,
+  signingKey,
+  services = [{ id: "aleph" }],
+}) {
   return dehydrate({
     orbitdb,
     address,
     seed: signingKey,
     label: LABEL,
     backend: await backendFor(services),
+    ...(await cipher(signingKey)),
   });
 }
 
@@ -220,8 +267,15 @@ export async function backUp({ orbitdb, address, signingKey, services = [{ id: "
  * Gateways that stopped serving: the first four on 2026-09-21, answering 429
  * with a Sunset header, and `trustless-gateway.link` after them with 525.
  */
-const RETIRED = ["dweb.link", "ipfs.io", "w3s.link", "storacha.link", "trustless-gateway.link"];
-const isStillServing = (gateway) => !RETIRED.some((host) => gateway.includes(host));
+const RETIRED = [
+  "dweb.link",
+  "ipfs.io",
+  "w3s.link",
+  "storacha.link",
+  "trustless-gateway.link",
+];
+const isStillServing = (gateway) =>
+  !RETIRED.some((host) => gateway.includes(host));
 
 /**
  * The two ways the backup can come back, and how they are chosen.
@@ -285,18 +339,35 @@ export async function bringBack({
    * to be looked up per CID; for a backup written minutes ago the provider
    * that answers is the service it was written to.
    *
-   * Aleph's webrtc certhash changes when that node restarts. Then this path
-   * fails and the gateway carries the restore, which is the arrangement
-   * working rather than breaking.
+   * Aleph is looked up rather than assumed. `ALEPH_BITSWAP` rots: on
+   * 2026-10-29 the routing answered with a different *peer id*, not merely new
+   * certificate hashes, so the constant named a node that no longer serves
+   * these CIDs. The lookup is what the routing is for, and it is what the
+   * Lighthouse branch already did; the constant stays behind it for the case
+   * where the routing itself cannot be reached.
+   *
+   * When every address fails the gateway carries the restore, which is the
+   * arrangement working rather than breaking — except in the live test, which
+   * refuses the gateways on purpose and therefore needs this to be current.
    */
   const providers = async (cid) => {
     const addrs = [];
+    if (chose("aleph") || chose("lighthouse")) {
+      const found = await providersFor(cid).catch(() => []);
+      // The routing hands back the addresses as recorded, without the peer id,
+      // and a `/webrtc-direct` address cannot be dialled without one. The
+      // constants below carry theirs, which is why they worked and this did
+      // not — the Lighthouse branch has had the same hole from the start.
+      addrs.push(
+        ...found.flatMap((provider) =>
+          provider.addrs.map((addr) =>
+            addr.includes("/p2p/") ? addr : `${addr}/p2p/${provider.id}`,
+          ),
+        ),
+      );
+    }
     if (chose("aleph")) addrs.push(...ALEPH_BITSWAP);
     if (chose("pinata")) addrs.push(PINATA_BITSWAP);
-    if (chose("lighthouse")) {
-      const found = await providersFor(cid).catch(() => []);
-      addrs.push(...found.flatMap((provider) => provider.addrs));
-    }
     return addrs;
   };
 
@@ -323,8 +394,13 @@ export async function bringBack({
       : path === "p2p"
         ? viaPeers
         : path === "race"
-          ? (cid, options) => Promise.any([viaGateway(cid, options), viaPeers(cid, options)])
-          : createGatewayFirstFetch({ viaGateway, viaPeers, gatewayTimeout: 3000 });
+          ? (cid, options) =>
+              Promise.any([viaGateway(cid, options), viaPeers(cid, options)])
+          : createGatewayFirstFetch({
+              viaGateway,
+              viaPeers,
+              gatewayTimeout: 3000,
+            });
 
   return hydrate({
     orbitdb,
@@ -332,6 +408,9 @@ export async function bringBack({
     label: LABEL,
     open: { sync: false },
     restore: { fetchBytes },
+    // The same derivation as the backup: the second device works the key out
+    // from the security key, with nothing carried over.
+    ...(await cipher(signingKey)),
   });
 }
 
@@ -353,7 +432,10 @@ export async function forgetEverything() {
         (database) =>
           new Promise((resolve) => {
             const request = indexedDB.deleteDatabase(database.name);
-            request.onsuccess = request.onerror = request.onblocked = () => resolve();
+            request.onsuccess =
+              request.onerror =
+              request.onblocked =
+                () => resolve();
           }),
       ),
   );

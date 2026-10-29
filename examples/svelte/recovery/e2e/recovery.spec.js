@@ -45,14 +45,19 @@ async function enrolPasskey(page) {
         },
         challenge: crypto.getRandomValues(new Uint8Array(32)),
         pubKeyCredParams: [{ type: "public-key", alg: -7 }],
-        authenticatorSelection: { residentKey: "required", userVerification: "required" },
+        authenticatorSelection: {
+          residentKey: "required",
+          userVerification: "required",
+        },
         extensions: { prf: {} },
       },
     });
   });
 }
 
-test("the key alone gives an identity OrbitDB takes, and it writes", async ({ page }) => {
+test("the key alone gives an identity OrbitDB takes, and it writes", async ({
+  page,
+}) => {
   // Nothing may leave this machine before backup is pressed.
   const strayed = [];
   await page.route(
@@ -76,15 +81,24 @@ test("the key alone gives an identity OrbitDB takes, and it writes", async ({ pa
   await enrolPasskey(page);
 
   await page.getByTestId("use-key").click();
-  await expect(page.getByTestId("did-fingerprint")).toHaveText(/^[0-9a-f]{4}( [0-9a-f]{4}){3}$/, {
-    timeout: 30_000,
-  });
+  await expect(page.getByTestId("did-fingerprint")).toHaveText(
+    /^[0-9a-f]{4}( [0-9a-f]{4}){3}$/,
+    {
+      timeout: 30_000,
+    },
+  );
   // The third touch: the signing key bound to the identity, OrbitDB running on it.
-  await expect(page.locator(".log")).toContainText("OrbitDB is running with that identity", {
-    timeout: 30_000,
-  });
+  await expect(page.locator(".log")).toContainText(
+    "OrbitDB is running with that identity",
+    {
+      timeout: 30_000,
+    },
+  );
   await expect(page.getByTestId("error")).toHaveCount(0);
-  await expect(page.locator(".step").first()).toHaveAttribute("data-status", "done");
+  await expect(page.locator(".step").first()).toHaveAttribute(
+    "data-status",
+    "done",
+  );
 
   // The numbers two phones are compared by are there, but behind one button.
   await expect(page.getByTestId("did-fingerprint")).toBeHidden();
@@ -93,31 +107,44 @@ test("the key alone gives an identity OrbitDB takes, and it writes", async ({ pa
   await expect(page.locator(".log")).toBeVisible();
 
   await page.getByTestId("make-list").click();
-  await expect(page.locator(".log")).toContainText("list open:", { timeout: 30_000 });
+  await expect(page.locator(".log")).toContainText("list open:", {
+    timeout: 30_000,
+  });
 
   await page.getByLabel("new entry").fill("Milch kaufen");
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.locator("li", { hasText: "Milch kaufen" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("li", { hasText: "Milch kaufen" })).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(page.getByTestId("error")).toHaveCount(0);
 
   expect(strayed).toEqual([]);
 });
 
-test("speaks German and English, and has a light and a dark look — both kept", async ({ page }) => {
+test("speaks German and English, and has a light and a dark look — both kept", async ({
+  page,
+}) => {
   await page.goto("/");
   // The test browser asks for English, and for the light look.
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(page.getByRole("heading", { name: /Tell the page who you are/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Tell the page who you are/ }),
+  ).toBeVisible();
 
   // Two chips, top right (src/ui.js), each named for what it will do rather
   // than for what is on.
   await page.getByRole("button", { name: "Auf Deutsch lesen" }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
-  await expect(page.getByRole("heading", { name: /Identität vom Schlüssel/ })).toBeVisible();
-  await expect(page.getByTestId("use-key")).toHaveText("Sicherheitsschlüssel verwenden");
+  await expect(
+    page.getByRole("heading", { name: /Identität vom Schlüssel/ }),
+  ).toBeVisible();
+  await expect(page.getByTestId("use-key")).toHaveText(
+    "Sicherheitsschlüssel verwenden",
+  );
   await expect(page).toHaveTitle(/eine Liste, die das Telefon übersteht/);
 
-  const ground = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const ground = () =>
+    page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const light = await ground();
   await page.getByRole("button", { name: "Darstellung wechseln" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -127,7 +154,9 @@ test("speaks German and English, and has a light and a dark look — both kept",
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expect(page.getByTestId("use-key")).toHaveText("Sicherheitsschlüssel verwenden");
+  await expect(page.getByTestId("use-key")).toHaveText(
+    "Sicherheitsschlüssel verwenden",
+  );
   expect(await ground()).not.toBe(light);
 });
 
@@ -145,10 +174,15 @@ test("speaks German and English, and has a light and a dark look — both kept",
 const live = process.env.RECOVERY_LIVE === "true";
 
 test.describe("the peer path", () => {
-  test.skip(!live, "set RECOVERY_LIVE=true — this one really uploads and really dials");
+  test.skip(
+    !live,
+    "set RECOVERY_LIVE=true — this one really uploads and really dials",
+  );
   test.setTimeout(240_000);
 
-  test("the list comes back over libp2p when no gateway will answer", async ({ page }) => {
+  test("the list comes back over libp2p when no gateway will answer", async ({
+    page,
+  }) => {
     await page.goto("/?fetch=first");
     await attachSecurityKey(page);
     await enrolPasskey(page);
@@ -156,21 +190,42 @@ test.describe("the peer path", () => {
     await page.getByTestId("details").click();
 
     await page.getByTestId("use-key").click();
-    await expect(page.locator(".step").first()).toHaveAttribute("data-status", "done", {
-      timeout: 60_000,
-    });
+    await expect(page.locator(".step").first()).toHaveAttribute(
+      "data-status",
+      "done",
+      {
+        timeout: 60_000,
+      },
+    );
 
     await page.getByTestId("make-list").click();
-    await expect(page.locator(".log")).toContainText("list open:", { timeout: 60_000 });
+    await expect(page.locator(".log")).toContainText("list open:", {
+      timeout: 60_000,
+    });
     await page.getByLabel("new entry").fill("über libp2p zurückgeholt");
     await page.getByRole("button", { name: "Add", exact: true }).click();
 
     await page.getByTestId("dehydrate").click();
-    await expect(page.locator(".log")).toContainText("pointer", { timeout: 120_000 });
+    // Not the log: it says "backing up, and publishing the pointer..." *before*
+    // the work starts, so waiting for the word let this test carry on while the
+    // upload was still in flight — and the two steps below cut the network and
+    // reload the page, which killed it. The name is rendered only once the
+    // backup has returned, so that is the thing to wait for.
+    await expect(page.getByTestId("pointer-name")).toBeVisible({
+      timeout: 120_000,
+    });
 
     // From here the gateways do not exist. The pointer lookup is a different
     // host and stays reachable — this is about the bytes, not the name.
-    await page.route("**/ipfs/**", (route) => route.abort("connectionrefused"));
+    //
+    // Not `**/ipfs/**`: since #181 an upload goes to the API node's
+    // /api/v0/ipfs/add_file, which that glob also matches. Refusing a gateway
+    // read is the point here; refusing the upload would be a different test.
+    await page.route(
+      (url) =>
+        url.pathname.includes("/ipfs/") && url.hostname !== "api2.aleph.im",
+      (route) => route.abort("connectionrefused"),
+    );
 
     // "Forget" reloads the page 600 ms later, so waiting for the current load
     // state returns immediately and the next click lands on a page about to be
@@ -182,17 +237,25 @@ test.describe("the peer path", () => {
     // so it survives the reload with its passkey — attaching a second one here
     // would give the page two keys and an identity it never backed up with.
     await page.getByTestId("use-key").click();
-    await expect(page.locator(".step").first()).toHaveAttribute("data-status", "done", {
-      timeout: 60_000,
-    });
+    await expect(page.locator(".step").first()).toHaveAttribute(
+      "data-status",
+      "done",
+      {
+        timeout: 60_000,
+      },
+    );
 
     await page.getByTestId("hydrate").click();
 
     // The entry is back, and the page says which way it came.
-    await expect(page.locator("li", { hasText: "über libp2p zurückgeholt" })).toBeVisible({
+    await expect(
+      page.locator("li", { hasText: "über libp2p zurückgeholt" }),
+    ).toBeVisible({
       timeout: 180_000,
     });
-    await expect(page.locator('.path[data-state="good"]')).toContainText(/libp2p/);
+    await expect(page.locator('.path[data-state="good"]')).toContainText(
+      /libp2p/,
+    );
     await expect(page.locator('.path[data-state="bad"]')).toBeVisible();
     await expect(page.getByTestId("error")).toHaveCount(0);
   });
