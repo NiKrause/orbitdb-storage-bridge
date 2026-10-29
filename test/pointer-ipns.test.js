@@ -26,7 +26,7 @@ const SEED = new TextEncoder().encode(
 );
 
 /** A routing endpoint of our own, and a note of everything it was asked. */
-function startEndpoint({ refuse = false } = {}) {
+function startEndpoint({ refuse = false, missAs200 = false } = {}) {
   const records = new Map();
   const asked = [];
   const server = createServer((request, response) => {
@@ -47,6 +47,13 @@ function startEndpoint({ refuse = false } = {}) {
     }
     const record = records.get(name);
     if (!record) {
+      // What delegated-ipfs.dev really answers for a name it does not hold.
+      if (missAs200) {
+        response
+          .writeHead(200, { "content-type": "text/plain; charset=utf-8" })
+          .end("delegate error: routing: not found\n");
+        return;
+      }
       response.writeHead(404).end("not found");
       return;
     }
@@ -215,5 +222,51 @@ describe("pointer-ipns — a name computed from a seed, not remembered", () => {
     await expect(
       resolvePointer({ privateKey: key, endpoints: [endpoint.url] }),
     ).rejects.toThrow(/404/);
+  });
+
+  test("a miss dressed as 200 says what the endpoint said, not what our parser thinks", async () => {
+    // delegated-ipfs.dev answers an unknown name with 200 and a sentence in
+    // text/plain. Read as a record that is "invalid wire type 4 at offset 1",
+    // which sends the reader after a protocol fault instead of a missing
+    // pointer.
+    const polite = await startEndpoint({ missAs200: true });
+    const key = await derivePointerKey(SEED, {
+      label: "a miss dressed as 200",
+    });
+
+    const failed = await resolvePointer({
+      privateKey: key,
+      endpoints: [polite.url],
+    }).catch((error) => error);
+
+    expect(failed.message).toMatch(/routing: not found/);
+    expect(failed.message).not.toMatch(/wire type/);
+
+    await polite.stop();
+  });
+
+  test("bytes that are a record for another name still fail as a bad record", async () => {
+    // The message above is for prose, not for a signature that does not hold:
+    // that one is the validator's to report, and worth reading as such.
+    const mine = await derivePointerKey(SEED, { label: "mine" });
+    const theirs = await derivePointerKey(SEED, { label: "theirs" });
+    await publishPointer({
+      privateKey: theirs,
+      cid: CID_ONE,
+      endpoints: [endpoint.url],
+    });
+    // Serve their record under my name.
+    endpoint.records.set(
+      pointerName(mine),
+      endpoint.records.get(pointerName(theirs)),
+    );
+
+    const failed = await resolvePointer({
+      privateKey: mine,
+      endpoints: [endpoint.url],
+    }).catch((error) => error);
+
+    expect(failed.message).toMatch(new RegExp(pointerName(mine)));
+    expect(failed.message).not.toMatch(/routing: not found/);
   });
 });
