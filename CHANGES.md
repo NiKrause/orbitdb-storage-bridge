@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased
+## 0.27.1 (2026-10-29)
 
 ### Added
 
