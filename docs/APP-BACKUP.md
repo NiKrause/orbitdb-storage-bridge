@@ -28,7 +28,10 @@ Le-Space/invoice. Design and measurements: [#147](https://github.com/NiKrause/or
 ```js
 import { buildAppBackup } from "@le-space/orbitdb-storage-bridge/app-backup";
 import { createAlephBackend } from "@le-space/orbitdb-storage-bridge/backends/aleph";
-import { createAlephPin, waitForMessage } from "@le-space/orbitdb-storage-bridge/backends/aleph-pin";
+import {
+  createAlephPin,
+  waitForMessage,
+} from "@le-space/orbitdb-storage-bridge/backends/aleph-pin";
 
 const { bytes } = await buildAppBackup({
   app: "invoice",
@@ -37,10 +40,18 @@ const { bytes } = await buildAppBackup({
   encrypt, // (plaintext) => ({ ciphertext, iv }), with the application's key
 });
 
-const { id } = await createAlephBackend().putBlob(bytes, { name: "invoice-2026-10-03.backup" });
-const pin = createAlephPin({ sender: delegate.address, owner: PAYING_ACCOUNT, sign: delegate.sign, channel: "INVOICE-BACKUP" });
+const { id } = await createAlephBackend().putBlob(bytes, {
+  name: "invoice-2026-10-03.backup",
+});
+const pin = createAlephPin({
+  sender: delegate.address,
+  owner: PAYING_ACCOUNT,
+  sign: delegate.sign,
+  channel: "INVOICE-BACKUP",
+});
 const { itemHash, status } = await pin(id);
-const kept = status === "processed" ? { status } : await waitForMessage(itemHash);
+const kept =
+  status === "processed" ? { status } : await waitForMessage(itemHash);
 // kept.status: "processed", or "rejected" with Aleph's reason (for example, not enough credit)
 ```
 
@@ -99,7 +110,6 @@ sequenceDiagram
     Note over API: credit is checked and booked on content.address — the owner — not on the sender
 ```
 
-
 ## Finding it on an empty device
 
 ```js
@@ -107,7 +117,10 @@ import { listAlephStores } from "@le-space/orbitdb-storage-bridge/backends/aleph
 import { fetchFromGateways } from "@le-space/orbitdb-storage-bridge/gateway-fetch";
 import { readAppBackupHeader } from "@le-space/orbitdb-storage-bridge/app-backup";
 
-const { stores } = await listAlephStores({ owner: PAYING_ACCOUNT, channel: "INVOICE-BACKUP" }); // newest first
+const { stores } = await listAlephStores({
+  owner: PAYING_ACCOUNT,
+  channel: "INVOICE-BACKUP",
+}); // newest first
 const bytes = await fetchFromGateways(stores[0].cid);
 const { header } = readAppBackupHeader(bytes); // e.g. find this passkey's slot, and the key in it
 ```
@@ -117,7 +130,11 @@ All the device needs is the paying account's public address.
 `listAlephStores` pages: 50 per page by default (`pagination`, `page`), newest first within a page,
 and `total` is the API's count — a long channel needs the next page before "newest" means anything.
 `ref` narrows the listing to one chain ([LIVE-BACKUP.md](LIVE-BACKUP.md), "Several chains on one
-account").
+account"). A STORE made with `size` (`pin.sign(cid, { size })`, or the signed upload through an API
+node, which fills it) is listed with it: pass it on as `getBlob(handle, { size })` – or in the
+handle – and a download that comes back short is refused at the gateway. A UnixFS CID is checked
+by building the DAG again from the bytes (`matchesUnixfsCid`); a sealed file that came back
+damaged would otherwise fail to open, which looks exactly like a wrong key.
 
 ### The restore, both shapes
 
@@ -175,14 +192,21 @@ sequenceDiagram
     end
 ```
 
-
 ## Restoring
 
 ```js
-import { openAppBackup, restoreAppBackup } from "@le-space/orbitdb-storage-bridge/app-backup";
+import {
+  openAppBackup,
+  restoreAppBackup,
+} from "@le-space/orbitdb-storage-bridge/app-backup";
 
 const opened = await openAppBackup(bytes, { decrypt, app: "invoice" });
-await restoreAppBackup({ orbitdb, opened, addresses, open: { encryption, AccessController } });
+await restoreAppBackup({
+  orbitdb,
+  opened,
+  addresses,
+  open: { encryption, AccessController },
+});
 ```
 
 - **What `openAppBackup` checks.** Every block is verified against its own CID. A wrong key fails in
@@ -200,9 +224,17 @@ A new backup does not remove the old one: each is a STORE the account pays for b
 new STORE is `processed`, forget the rest, and only the rest:
 
 ```js
-import { createAlephForget, forgetAlephStores } from "@le-space/orbitdb-storage-bridge/backends/aleph-pin";
+import {
+  createAlephForget,
+  forgetAlephStores,
+} from "@le-space/orbitdb-storage-bridge/backends/aleph-pin";
 
-const forget = createAlephForget({ sender: delegate.address, owner: PAYING_ACCOUNT, sign: delegate.sign, channel: "INVOICE-BACKUP" });
+const forget = createAlephForget({
+  sender: delegate.address,
+  owner: PAYING_ACCOUNT,
+  sign: delegate.sign,
+  channel: "INVOICE-BACKUP",
+});
 const { forgotten, kept, rejected, pending } = await forgetAlephStores({
   owner: PAYING_ACCOUNT,
   channel: "INVOICE-BACKUP",

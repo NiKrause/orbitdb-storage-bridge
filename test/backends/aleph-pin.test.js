@@ -833,6 +833,56 @@ describe("a STORE's ref: one chain of several on an account", () => {
   const DELEGATE = "0x9876543210FEDCBA9876543210fedcba98765432";
   const content = (message) => JSON.parse(message.item_content);
 
+  test("buildStoreMessage carries the size when given, none otherwise, and refuses what is not a byte count", async () => {
+    const plain = await buildStoreMessage({ sender: ADDRESS, cid: CID });
+    expect("size" in JSON.parse(plain.item_content)).toBe(false);
+    const sized = await buildStoreMessage({
+      sender: ADDRESS,
+      cid: CID,
+      size: 4096,
+    });
+    expect(JSON.parse(sized.item_content).size).toBe(4096);
+    const empty = await buildStoreMessage({
+      sender: ADDRESS,
+      cid: CID,
+      size: 0,
+    });
+    expect(JSON.parse(empty.item_content).size).toBe(0);
+    for (const size of [-1, 1.5, "4096", NaN]) {
+      await expect(
+        buildStoreMessage({ sender: ADDRESS, cid: CID, size }),
+      ).rejects.toThrow(/whole number of bytes/);
+    }
+  });
+
+  test("listAlephStores reports the size a STORE names, and nothing for one without", async () => {
+    const fetchImpl = answeringFetch([
+      {
+        status: 200,
+        body: {
+          pagination_total: 3,
+          messages: [
+            {
+              ...stored("h1", "Qm1", 100),
+              content: { ...stored("h1", "Qm1", 100).content, size: 123456 },
+            },
+            {
+              ...stored("h2", "Qm2", 200),
+              content: { ...stored("h2", "Qm2", 200).content, size: "big" },
+            },
+            stored("h3", "Qm3", 300),
+          ],
+        },
+      },
+    ]);
+    const { stores } = await listAlephStores({
+      owner: OWNER,
+      channel: "SOME-BACKUP",
+      fetch: fetchImpl,
+    });
+    expect(stores.map((s) => s.size)).toEqual([undefined, undefined, 123456]);
+  });
+
   test("buildStoreMessage carries a ref when given, none otherwise, and refuses an empty one", async () => {
     const plain = await buildStoreMessage({ sender: ADDRESS, cid: CID });
     expect("ref" in content(plain)).toBe(false);
