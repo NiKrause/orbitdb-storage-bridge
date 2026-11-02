@@ -130,6 +130,7 @@ Galaxy A57 with the same key brought the database back and wrote to it. Source:
 | [docs/APP-BACKUP.md](docs/APP-BACKUP.md) | an application's backup in one sealed file: several databases, a keyring header, kept on Aleph from the browser, restored by merging |
 | [docs/LIVE-BACKUP.md](docs/LIVE-BACKUP.md) | increments between two full backups: what was written since the last one, shipped as one small CAR, with nobody clicking and no peer online |
 | [SVELTE-COMPONENTS.md](SVELTE-COMPONENTS.md) | the browser components — older than this repository's copy of them; [docs/STORACHA-UI-HISTORY.md](docs/STORACHA-UI-HISTORY.md) records what each piece could do and where it went |
+| [docs/POST-QUANTUM.md](docs/POST-QUANTUM.md) | what a quantum computer would and would not break: the encryption holds, the signatures do not, and the restore is gated on the AEAD rather than on a signature |
 | [docs/LOGGING.md](docs/LOGGING.md) | debug namespaces, in Node and in a browser |
 | [ROADMAP.md](ROADMAP.md) | what is planned |
 | [docs/STORACHA-SUNSET.md](docs/STORACHA-SUNSET.md) | why Storacha stopped being the default, with dates and evidence |
