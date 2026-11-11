@@ -24,6 +24,9 @@ import { bundleDatabases } from "../lib/extract-blocks.js";
 import { entryDatabaseId } from "../lib/restore-cid.js";
 import {
   createLiveBackup,
+  advanceConfirmation,
+  reconcileConfirmation,
+  NOT_KEPT,
   readIncrement,
   mergeIncrements,
   restoreFromIncrements,
@@ -601,8 +604,14 @@ describe("increments", () => {
   test("a chain carrying two databases does not write one's entries into the other", async () => {
     const store = new Map();
     const backend = createMemoryBackend({ store });
-    const books = await alice.orbitdb.open("live-two-books", { type: "keyvalue", ...open });
-    const notes = await alice.orbitdb.open("live-two-notes", { type: "keyvalue", ...open });
+    const books = await alice.orbitdb.open("live-two-books", {
+      type: "keyvalue",
+      ...open,
+    });
+    const notes = await alice.orbitdb.open("live-two-notes", {
+      type: "keyvalue",
+      ...open,
+    });
     const live = createLiveBackup({ databases: [books, notes], backend });
     for (let i = 0; i < 3; i++) {
       await books.put(`b${i}`, i);
@@ -610,10 +619,14 @@ describe("increments", () => {
     }
     await live.flush();
 
-    for (const [name, { bytes }] of (await bundleDatabases([books, notes])).blocks) {
+    for (const [name, { bytes }] of (await bundleDatabases([books, notes]))
+      .blocks) {
       await dave.helia.blockstore.put(CID.parse(name), bytes);
     }
-    const theirBooks = await dave.orbitdb.open(books.address, { type: "keyvalue", ...open });
+    const theirBooks = await dave.orbitdb.open(books.address, {
+      type: "keyvalue",
+      ...open,
+    });
 
     // Count what reaches this one database's log storage.
     const written = [];
@@ -766,6 +779,122 @@ describe("increments", () => {
     expect(shipped.sequence).toBe(1);
     expect(shipped.kept.status).toBe("processed");
     await live.stop();
+  });
+
+  test("a store that says pending and refuses later: reconcile goes back, and the next flush ships it all again", async () => {
+    const store = new Map();
+    const inner = createMemoryBackend({ store });
+    const backend = defineBackend({
+      ...inner,
+      capabilities: { ...inner.capabilities, pinByCid: true },
+      putBlob: async (bytes, meta) => ({
+        ...(await inner.putBlob(bytes, meta)),
+        retained: false,
+      }),
+      // Every answer is "pending": the store decides later.
+      pinCid: async (cid) => ({
+        id: cid,
+        cid,
+        backend: "memory",
+        retained: false,
+        status: "pending",
+      }),
+    });
+    const db = await alice.orbitdb.open("live-pending-refused", {
+      type: "events",
+      ...open,
+    });
+    let saved = null;
+    const live = createLiveBackup({
+      databases: [db],
+      backend,
+      state: { load: async () => saved, save: async (s) => (saved = s) },
+    });
+    await live.rebase({ base: "full-backup" });
+
+    await db.add("one");
+    const first = await live.flush();
+    await db.add("two");
+    const second = await live.flush();
+    expect(live.status()).toMatchObject({
+      sequence: 2,
+      unconfirmed: 2,
+      keptSequence: 0,
+    });
+
+    // The first is confirmed after all: kept moves on, nothing goes back.
+    const confirmed = await live.reconcile((cid) =>
+      cid === first.handle.id ? "processed" : "pending",
+    );
+    expect(confirmed).toMatchObject({ changed: true, rewound: false });
+    expect(live.status()).toMatchObject({ unconfirmed: 1, keptSequence: 1 });
+
+    // The second is refused: back to the first, and "two" ships again as number 2.
+    const refused = await live.reconcile((cid) =>
+      cid === second.handle.id ? "rejected" : "processed",
+    );
+    expect(refused).toMatchObject({ rewound: true, gap: false, sequence: 1 });
+    expect(saved.sequence).toBe(1);
+    expect(saved.unconfirmed).toEqual([]);
+    const again = await live.flush();
+    expect(again.sequence).toBe(2);
+    expect(again.entries).toBe(1);
+
+    // Nothing open that changed: reconcile says so.
+    await expect(live.reconcile(() => "pending")).resolves.toMatchObject({
+      changed: false,
+    });
+    await live.stop();
+  });
+
+  test("the bookkeeping on its own: confirm, go back, and a gap a restore cannot cross", () => {
+    const start = {
+      kept: { sequence: 0, previous: null, mine: "a" },
+      pending: [],
+    };
+    const one = advanceConfirmation(
+      start,
+      { sequence: 1, previous: "c1", mine: "b" },
+      "c1",
+      "processed",
+    );
+    expect(one).toEqual({
+      kept: { sequence: 1, previous: "c1", mine: "b" },
+      pending: [],
+    });
+    const two = advanceConfirmation(
+      one,
+      { sequence: 2, previous: "c2", mine: "c" },
+      "c2",
+      "pending",
+    );
+    const three = advanceConfirmation(
+      two,
+      { sequence: 3, previous: "c3", mine: "d" },
+      "c3",
+      "processed",
+    );
+    // A confirmed one behind a pending one waits its turn.
+    expect(three.kept.sequence).toBe(1);
+    expect(three.pending.map((p) => p.cid)).toEqual(["c2", "c3"]);
+
+    const all = reconcileConfirmation(three, () => "processed");
+    expect(all).toMatchObject({ changed: true, rewound: false, pending: [] });
+    expect(all.kept).toEqual({ sequence: 3, previous: "c3", mine: "d" });
+
+    const back = reconcileConfirmation(two, () => "unknown");
+    expect(back).toMatchObject({ rewound: true, gap: false, pending: [] });
+    expect(back.rewind).toEqual({ sequence: 1, previous: "c1", mine: "b" });
+
+    const gap = reconcileConfirmation(three, (cid) =>
+      cid === "c2" ? "rejected" : "processed",
+    );
+    expect(gap).toMatchObject({ rewound: true, gap: true });
+
+    expect(reconcileConfirmation(two, () => undefined)).toMatchObject({
+      changed: false,
+    });
+    expect(NOT_KEPT).toEqual(["rejected", "unknown", "forgotten"]);
   });
 
   test("a persisted state this build does not read is refused, not restarted at 1", async () => {
