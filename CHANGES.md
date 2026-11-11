@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- **`ALEPH_BITSWAP` names the node the routing names again.** On 2026-11-11 the routing answered
+  `12D3KooWACE5…` for fresh Aleph blobs, over IPv4, instead of the IPv6-only `12D3KooWJBw9…` the
+  constant held since 2026-10-29; the daily smoke test caught it on its first run. The constant
+  now holds both nodes, the current one first, and the new `ALEPH_PEER_IDS` lists both ids;
+  `ALEPH_PEER_ID` is the current one. The live check passes when the routing names either.
 - **With a pin that signs, an Aleph upload carries its STORE.** `createAlephBackend({ pin })`
   where `pin.sign` exists (`createAlephPin`) no longer uploads to the IPFS host first: every
   `putBlob` goes to the API node's `/api/v0/ipfs/add_file` with the signed STORE beside the

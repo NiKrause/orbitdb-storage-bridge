@@ -21,6 +21,7 @@ import {
   PINATA_BITSWAP,
   ALEPH_BITSWAP,
   ALEPH_PEER_ID,
+  ALEPH_PEER_IDS,
   BROWSER_TRANSPORTS,
   DEFAULT_ROUTERS,
   ALL_ROUTERS,
@@ -64,8 +65,11 @@ describe("which addresses a page could open", () => {
     expect(isBrowserDialable(PINATA_BITSWAP)).toBe(true);
     for (const addr of ALEPH_BITSWAP) {
       expect(isBrowserDialable(addr)).toBe(true);
-      expect(addr).toContain(ALEPH_PEER_ID);
+      expect(ALEPH_PEER_IDS.some((id) => addr.endsWith(`/p2p/${id}`))).toBe(true);
     }
+    // The node the routing names now comes first.
+    expect(ALEPH_PEER_IDS[0]).toBe(ALEPH_PEER_ID);
+    expect(ALEPH_BITSWAP[0]).toContain(ALEPH_PEER_ID);
   });
 
   test("both routers are asked, because they know different things", () => {

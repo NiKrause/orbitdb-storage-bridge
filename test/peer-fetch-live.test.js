@@ -21,7 +21,7 @@ import { jest, describe, test, expect } from "@jest/globals";
 import { createAlephBackend } from "../lib/backends/aleph.js";
 import {
   providersFor,
-  ALEPH_PEER_ID,
+  ALEPH_PEER_IDS,
   isBrowserDialable,
 } from "../lib/peer-fetch.js";
 
@@ -48,10 +48,10 @@ maybe("the peer behind ALEPH_BITSWAP", () => {
     }
 
     const ids = found.map((provider) => provider.id);
-    if (!ids.includes(ALEPH_PEER_ID)) {
+    if (!ids.some((id) => ALEPH_PEER_IDS.includes(id))) {
       // Not a console.log for its own sake: this is the whole repair.
       console.log(
-        `ALEPH_PEER_ID is ${ALEPH_PEER_ID}; the routing says ${ids.join(", ") || "nobody"}`,
+        `ALEPH_PEER_IDS are ${ALEPH_PEER_IDS.join(", ")}; the routing says ${ids.join(", ") || "nobody"}`,
       );
       for (const provider of found) {
         for (const addr of provider.addrs) {
@@ -61,6 +61,6 @@ maybe("the peer behind ALEPH_BITSWAP", () => {
         }
       }
     }
-    expect(ids).toContain(ALEPH_PEER_ID);
+    expect(ids.filter((id) => ALEPH_PEER_IDS.includes(id))).not.toEqual([]);
   });
 });
