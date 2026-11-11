@@ -18,6 +18,15 @@ import {
   stopInMemoryStorachaService,
 } from "../helpers/in-memory-storacha.js";
 import { startAlephStub } from "../helpers/aleph-stub.js";
+import {
+  createAlephPin,
+  createAlephForget,
+  waitForMessage,
+} from "../../lib/backends/aleph-pin.js";
+import { createEthSigner } from "../helpers/eth-signer.js";
+
+/** The channel every live STORE goes to, so a FORGET of leftovers finds them all. */
+export const SMOKE_CHANNEL = "ORBITDB-STORAGE-BRIDGE-SMOKE";
 
 export const drivers = [
   {
@@ -126,6 +135,111 @@ export const drivers = [
               },
             };
             // Lighthouse has no pin-by-CID, so there is nothing to publish to.
+            return { backend, real, created, publish: null };
+          },
+          async tearDown(context) {
+            for (const handle of context?.created || []) {
+              await context.real.remove(handle).catch((error) => {
+                console.log(`   cleanup could not remove ${handle.id}: ${error.message}`);
+              });
+            }
+          },
+        },
+      ]
+    : []),
+  // A real Aleph account, signing real STORE messages paid in credits: a few
+  // KB each, a day's minimum runtime. Upload and STORE are one call to the API
+  // node (the path a pin that signs takes since 0.27.3); a STORE Aleph has not
+  // processed fails the test with its error code, and everything is FORGOTTEN
+  // again in tearDown.
+  ...(process.env.ALEPH_LIVE === "true" && process.env.ALEPH_PRIVATE_KEY
+    ? [
+        {
+          name: "aleph (live account, signed STORE)",
+          async setUp() {
+            const { address, sign } = createEthSigner(
+              process.env.ALEPH_PRIVATE_KEY,
+            );
+            const pin = createAlephPin({
+              sender: address,
+              sign,
+              channel: SMOKE_CHANNEL,
+              ref: "conformance",
+            });
+            const forget = createAlephForget({
+              sender: address,
+              sign,
+              channel: SMOKE_CHANNEL,
+            });
+            const real = createAlephBackend({ pin });
+            const created = [];
+            const backend = {
+              ...real,
+              putBlob: async (bytes, meta) => {
+                const handle = await real.putBlob(bytes, meta);
+                if (handle.itemHash) created.push(handle.itemHash);
+                if (handle.status !== "processed") {
+                  const final = await waitForMessage(handle.itemHash, {
+                    timeout: 180_000,
+                    interval: 5_000,
+                  });
+                  if (final.status !== "processed") {
+                    throw new Error(
+                      `Aleph STORE ${handle.itemHash} for ${handle.id} via /api/v0/ipfs/add_file: ${final.status}` +
+                        (final.errorCode != null
+                          ? `, error_code ${final.errorCode}`
+                          : "") +
+                        (final.timedOut ? " after 180 s" : "") +
+                        (final.details
+                          ? ` — ${JSON.stringify(final.details).slice(0, 300)}`
+                          : ""),
+                    );
+                  }
+                  return { ...handle, retained: true, status: "processed" };
+                }
+                return handle;
+              },
+            };
+            // No publish: pinCid asks Aleph's nodes to fetch from the public
+            // network, which an in-process map is not.
+            return { backend, real, created, forget, publish: null };
+          },
+          async tearDown(context) {
+            if (!context?.created?.length) return;
+            const sent = await context.forget(context.created, "smoke test");
+            const final = await waitForMessage(sent.itemHash, {
+              timeout: 120_000,
+              interval: 5_000,
+            });
+            console.log(
+              `   FORGET ${sent.itemHash} of ${context.created.length} STORE(s): ${final.status}`,
+            );
+          },
+        },
+      ]
+    : []),
+  // A real Storacha space, on the same terms: opted into twice, and every
+  // upload removed again.
+  ...(process.env.STORACHA_LIVE === "true" &&
+  process.env.STORACHA_KEY &&
+  process.env.STORACHA_PROOF
+    ? [
+        {
+          name: "storacha (live space)",
+          async setUp() {
+            const real = await createStorachaBackend({
+              storachaKey: process.env.STORACHA_KEY,
+              storachaProof: process.env.STORACHA_PROOF,
+            });
+            const created = [];
+            const backend = {
+              ...real,
+              putBlob: async (bytes, meta) => {
+                const handle = await real.putBlob(bytes, meta);
+                created.push(handle);
+                return handle;
+              },
+            };
             return { backend, real, created, publish: null };
           },
           async tearDown(context) {

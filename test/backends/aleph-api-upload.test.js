@@ -164,6 +164,35 @@ describe("the API node, once the IPFS host is gone", () => {
     stub.ingestGone(false);
   });
 
+  // 2026-11-04 onwards: an upload to the IPFS host followed by a separate
+  // STORE was rejected with error_code 4 — the CCNs could not fetch the file
+  // back from that host. With a pin that signs, the host is not used at all.
+  test("with a pin that signs, a working IPFS host is skipped: upload and STORE are one call to the API node", async () => {
+    stub.ingestGone(false);
+    const pin = createAlephPin({
+      sender: SENDER,
+      sign,
+      channel: "TEST-UPLOAD",
+      apiHost: stub.url,
+    });
+    const calls = [];
+    const backend = createAlephBackend({
+      ingestUrl: stub.ingestUrl,
+      apiHost: stub.url,
+      gateways: [stub.gatewayUrl],
+      pin,
+      fetch: (url, init) => {
+        calls.push(new URL(url).pathname);
+        return fetch(url, init);
+      },
+    });
+    const bytes = bytesOf(4000, 5);
+    const handle = await backend.putBlob(bytes, { name: "signed-first.car" });
+    expect(calls).toEqual(["/api/v0/ipfs/add_file"]);
+    expect(handle).toMatchObject({ retained: true, status: "processed" });
+    expect(handle.id).toBe(await unixfsCid(bytes));
+  });
+
   test("too big for an unsigned upload: refused before anything is sent, and the error says what would help", async () => {
     stub.ingestGone(true);
     const calls = [];

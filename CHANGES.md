@@ -1,5 +1,29 @@
 # Changes
 
+## Unreleased
+
+### Fixed
+
+- **With a pin that signs, an Aleph upload carries its STORE.** `createAlephBackend({ pin })`
+  where `pin.sign` exists (`createAlephPin`) no longer uploads to the IPFS host first: every
+  `putBlob` goes to the API node's `/api/v0/ipfs/add_file` with the signed STORE beside the
+  file, and the node pins it in the same call. From about 2026-11-04 a STORE sent separately
+  after an upload to `ipfs.aleph.cloud/api/v0/add` was rejected with `error_code` 4 ("could not
+  retrieve IPFS content at this time"): Aleph's nodes could not fetch the file from that host,
+  which later dropped it (Le-Space/belege). On 2026-11-11 such a STORE stayed `pending` for
+  more than 50 minutes. Without a signing pin nothing changes; `pinCid` still relies on the
+  nodes finding the file.
+
+### Added
+
+- **A daily live smoke test.** `.github/workflows/live-backends.yml` runs every day (and still
+  by hand or by the `live-backends` label) against Aleph, Pinata, Lighthouse, Storacha (once its
+  secrets are set) and the default gateways: reachability, upload, keep, list, retrieval verified
+  against the CID, a small database backed up and restored, and cleanup. Aleph now signs real
+  STORE messages with a dedicated test account, waits for `processed` and FORGETs them. A
+  failing provider gets an issue (label `live-smoke`), commented on each failing day and closed
+  once it passes again.
+
 ## 0.27.2 (2026-10-29)
 
 ### Added

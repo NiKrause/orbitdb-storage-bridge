@@ -1,22 +1,37 @@
-# Live checks against real storage services — opt-in, never on every push.
+# Live checks against the real storage services, once a day.
 #
-# Two ways to run it:
+# Three ways it runs:
+#   - every day at 05:17 UTC (`schedule`), against main — the smoke test;
 #   - Actions → Live backends → Run workflow (pick the backends), or
-#     `gh workflow run live-backends.yml`
+#     `gh workflow run live-backends.yml --ref <branch>`;
 #   - label a pull request `live-backends`, which runs it against that pull
-#     request's code before it is merged
+#     request's code before it is merged.
 #
-# It spends real resources — a Pinata account's quota, Aleph ingest — so nothing
-# starts it automatically. Keys come from repository secrets and never leave
-# GitHub; a pull request from a fork gets no secrets, so the Pinata job fails
-# there with a message instead of running.
+# Every provider is asked the same things: is the API there, does an upload
+# go up and get kept, is it listed, does it come back verified against its
+# CID, does a small OrbitDB database survive a backup and a restore on a node
+# that never saw it — and is everything deleted (Pinata, Lighthouse, Storacha)
+# or FORGOTTEN (Aleph) again, so nothing accumulates. A few KB per run.
+#
+# Aleph had only a keyless test until 2026-11-11, which never asked Aleph to
+# keep anything — exactly what broke on 2026-11-04 (STOREs rejected with
+# error_code 4). It now signs real STORE messages with a dedicated, funded
+# test account and waits for `processed`.
+#
+# A scheduled run that fails opens one issue per provider (label
+# `live-smoke`), comments on it every failing day, and closes it once the
+# provider passes again. Keys come from repository secrets and never leave
+# GitHub; a pull request from a fork gets no secrets, so the jobs fail there
+# with a message instead of running.
 name: Live backends
 
 on:
+  schedule:
+    - cron: "17 5 * * *"
   workflow_dispatch:
     inputs:
       aleph:
-        description: "Aleph: keyless upload, and a database backed up and restored"
+        description: "Aleph: keyless upload, signed STORE → processed → FORGET, database restore"
         type: boolean
         default: true
       pinata:
@@ -27,24 +42,44 @@ on:
         description: "Lighthouse: upload, list, delete, database restore"
         type: boolean
         default: true
+      storacha:
+        description: "Storacha: upload, list, remove, database restore (skipped without its secrets)"
+        type: boolean
+        default: true
       gateways:
         description: "Gateways: is every gateway we default to still serving?"
         type: boolean
         default: true
+      report_issues:
+        description: "Open/comment/close the per-provider issues, as a scheduled run does"
+        type: boolean
+        default: false
   pull_request:
     types: [labeled]
+
+permissions:
+  contents: read
 
 concurrency:
   group: live-backends-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  NODE_OPTIONS: "--experimental-vm-modules --no-warnings"
+
 jobs:
   aleph:
     name: Aleph (live)
     if: >-
+      github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && inputs.aleph) ||
       (github.event_name == 'pull_request' && github.event.label.name == 'live-backends')
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ALEPH_LIVE: "true"
+      # A dedicated test account with a few credits — never a real user's.
+      ALEPH_PRIVATE_KEY: ${{ secrets.ALEPH_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,13 +88,12 @@ jobs:
           node-version: "22"
           cache: "npm"
 
-      - run: npm ci
+      - run: npm ci && mkdir -p smoke
 
-      - name: Aleph against the real host
-        run: npx jest test/backends/aleph-live.test.js --forceExit
-        env:
-          ALEPH_LIVE: "true"
-          NODE_OPTIONS: "--experimental-vm-modules --no-warnings"
+      # API reachability, keyless upload to the IPFS host, retrieval through
+      # the gateway verified against the CID.
+      - name: "Aleph keyless: ipfs.aleph.cloud /api/v0/add and the gateway"
+        run: npx jest test/backends/aleph-live.test.js --forceExit --json --outputFile=smoke/1-aleph-keyless.json
 
       # The peer behind ALEPH_BITSWAP. It went stale without a sound once —
       # a different peer id, not the rotating certhash the docstring promised —
@@ -67,17 +101,63 @@ jobs:
       # the upload test above failed, because it answers its own question.
       - name: The constant still names Aleph's node
         if: success() || failure()
-        run: npx jest test/peer-fetch-live.test.js --forceExit
+        run: npx jest test/peer-fetch-live.test.js --forceExit --json --outputFile=smoke/2-aleph-peer.json
         env:
           PEERS_LIVE: "true"
-          NODE_OPTIONS: "--experimental-vm-modules --no-warnings"
+
+      # A missing secret or an empty account fails here once, with a reason.
+      # Prints the address and the balance, never the key.
+      - name: The Aleph test account exists and has credits
+        id: key
+        if: success() || failure()
+        run: node test/helpers/check-aleph-key.js
+
+      # Upload and STORE in one call to api2.aleph.im, processed, listed by
+      # owner, served by the API node and the gateway, FORGOTTEN.
+      - name: "Aleph signed: STORE → processed → listed → retrieved → FORGET"
+        if: (success() || failure()) && steps.key.outcome == 'success'
+        run: npx jest test/backends/aleph-store-live.test.js --forceExit --json --outputFile=smoke/3-aleph-store.json
+
+      # The shared table with the live, signing Aleph driver in it: a real
+      # database backed up through it and restored on a node that never saw it.
+      - name: Aleph in the conformance and restore suites
+        if: (success() || failure()) && steps.key.outcome == 'success'
+        run: npx jest test/backends/conformance.test.js test/backends/restore.test.js --forceExit --json --outputFile=smoke/4-aleph-table.json
+
+      # The two-step path (upload to the IPFS host, then a separate STORE)
+      # that failed with error_code 4 from 2026-11-04. Watched, not relied on:
+      # a pin that signs no longer uploads that way, so its failure is a
+      # warning in the summary and does not fail the run or open an issue.
+      - name: "Aleph two-step: /api/v0/add, then a separate STORE (informational)"
+        if: (success() || failure()) && steps.key.outcome == 'success'
+        continue-on-error: true
+        run: npx jest test/backends/aleph-ingest-store-live.test.js --forceExit --json --outputFile=smoke/info-aleph-two-step.json
+
+      # Whatever happened above: FORGET everything the test account still
+      # keeps on the smoke channel, so no credits drain on leftovers.
+      - name: Forget what is left on the smoke channel
+        if: always() && steps.key.outcome == 'success'
+        run: node test/helpers/aleph-sweep.js
+
+      - name: Report
+        if: always()
+        run: node test/helpers/smoke-report.js Aleph smoke
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-aleph
+          path: smoke/report.md
+          if-no-files-found: ignore
 
   pinata:
     name: Pinata (live)
     if: >-
+      github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && inputs.pinata) ||
       (github.event_name == 'pull_request' && github.event.label.name == 'live-backends')
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       PINATA_LIVE: "true"
       PINATA_JWT: ${{ secrets.PINATA_JWT }}
@@ -87,7 +167,6 @@ jobs:
       PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
       # "true" when the account's plan has pin by CID; the free plan does not.
       PINATA_PAID_PLAN: ${{ vars.PINATA_PAID_PLAN }}
-      NODE_OPTIONS: "--experimental-vm-modules --no-warnings"
     steps:
       - uses: actions/checkout@v4
 
@@ -96,10 +175,11 @@ jobs:
           node-version: "22"
           cache: "npm"
 
-      - run: npm ci
+      - run: npm ci && mkdir -p smoke
 
-      # A bad secret fails here once, with a reason, instead of as a wall of
-      # 401s. Prints the secret's shape and Pinata's status codes, never the value.
+      # API reachability, and a bad secret fails here once, with a reason
+      # instead of as a wall of 401s. Prints the secret's shape and Pinata's
+      # status codes, never the value.
       - name: Pinata accepts the key
         id: key
         run: node test/helpers/check-pinata-key.js
@@ -111,30 +191,43 @@ jobs:
       - name: The gateway serves this account's uploads
         run: node test/helpers/probe-pinata-gateway.js
 
-      # The shared table: every operation the driver declares, and a real
-      # database backed up through it and restored on a node that never saw it.
+      # The shared table: upload, list, retrieval verified against the CID,
+      # delete, and a real database backed up and restored on a node that
+      # never saw it. Everything uploaded is deleted again in tearDown.
       - name: Pinata in the conformance and restore suites
-        run: npx jest test/backends/conformance.test.js test/backends/restore.test.js --forceExit
+        run: npx jest test/backends/conformance.test.js test/backends/restore.test.js --forceExit --json --outputFile=smoke/1-pinata-table.json
 
       # Runs even when the table failed, since pin by CID is a separate
       # question — but not without a key Pinata accepts. On a free plan it
       # checks the refusal instead.
       - name: Pinata pin by CID
         if: (success() || failure()) && steps.key.outcome == 'success'
-        run: npx jest test/backends/pinata-live.test.js --forceExit
+        run: npx jest test/backends/pinata-live.test.js --forceExit --json --outputFile=smoke/2-pinata-pin.json
+
+      - name: Report
+        if: always()
+        run: node test/helpers/smoke-report.js Pinata smoke
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-pinata
+          path: smoke/report.md
+          if-no-files-found: ignore
 
   lighthouse:
     name: Lighthouse (live)
     if: >-
+      github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && inputs.lighthouse) ||
       (github.event_name == 'pull_request' && github.event.label.name == 'live-backends')
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       LIGHTHOUSE_LIVE: "true"
       LIGHTHOUSE_API_KEY: ${{ secrets.LIGHTHOUSE_API_KEY }}
       # Optional, not secret: a gateway other than gateway.lighthouse.storage.
       LIGHTHOUSE_GATEWAY: ${{ vars.LIGHTHOUSE_GATEWAY }}
-      NODE_OPTIONS: "--experimental-vm-modules --no-warnings"
     steps:
       - uses: actions/checkout@v4
 
@@ -143,32 +236,99 @@ jobs:
           node-version: "22"
           cache: "npm"
 
-      - run: npm ci
+      - run: npm ci && mkdir -p smoke
 
-      # A bad secret fails here once, with a reason. Prints the secret's shape
-      # and Lighthouse's status code, never the value.
+      # API reachability, and a bad secret fails here once, with a reason.
+      # Prints the secret's shape and Lighthouse's status code, never the value.
       - name: Lighthouse accepts the key
         run: node test/helpers/check-lighthouse-key.js
 
-      # The shared table: every operation the driver declares, and a real
-      # database backed up through it and restored on a node that never saw it.
-      # Everything uploaded is deleted again in tearDown.
+      # The shared table: upload, list, retrieval verified against the CID,
+      # delete, and a real database backed up and restored on a node that
+      # never saw it. Everything uploaded is deleted again in tearDown.
       - name: Lighthouse in the conformance and restore suites
-        run: npx jest test/backends/conformance.test.js test/backends/restore.test.js --forceExit
+        run: npx jest test/backends/conformance.test.js test/backends/restore.test.js --forceExit --json --outputFile=smoke/1-lighthouse-table.json
+
+      - name: Report
+        if: always()
+        run: node test/helpers/smoke-report.js Lighthouse smoke
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-lighthouse
+          path: smoke/report.md
+          if-no-files-found: ignore
+
+  # Optional: runs once STORACHA_KEY and STORACHA_PROOF are set, and says it
+  # skipped (a notice, not a failure) until then.
+  storacha:
+    name: Storacha (live)
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.storacha) ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'live-backends')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      STORACHA_LIVE: "true"
+      STORACHA_KEY: ${{ secrets.STORACHA_KEY }}
+      STORACHA_PROOF: ${{ secrets.STORACHA_PROOF }}
+    steps:
+      - name: Storacha secrets present
+        id: configured
+        run: |
+          if [ -n "$STORACHA_KEY" ] && [ -n "$STORACHA_PROOF" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Storacha skipped: set the STORACHA_KEY and STORACHA_PROOF repository secrets to include it in the smoke test."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.configured.outputs.run == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.configured.outputs.run == 'true'
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - if: steps.configured.outputs.run == 'true'
+        run: npm ci && mkdir -p smoke
+
+      # The shared table with the live space in it: upload, list, retrieval
+      # verified against the CID, remove, and a database backed up and
+      # restored. Every upload is removed again in tearDown.
+      - name: Storacha in the conformance and restore suites
+        if: steps.configured.outputs.run == 'true'
+        run: npx jest test/backends/conformance.test.js test/backends/restore.test.js --forceExit --json --outputFile=smoke/1-storacha-table.json
+
+      - name: Report
+        if: always() && steps.configured.outputs.run == 'true'
+        run: node test/helpers/smoke-report.js Storacha smoke
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.configured.outputs.run == 'true'
+        with:
+          name: smoke-storacha
+          path: smoke/report.md
+          if-no-files-found: ignore
 
   # Cheap, keyless, and the one that goes stale on its own: a gateway is
   # somebody else's infrastructure and can be retired without telling us.
   # Issue #111 was exactly that, unnoticed until a restore needed the tail of
-  # the list. Worth running on a schedule if this keeps happening.
+  # the list.
   gateways:
     name: Gateways (live)
     if: >-
+      github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' && inputs.gateways) ||
       (github.event_name == 'pull_request' && github.event.label.name == 'live-backends')
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       GATEWAYS_LIVE: "true"
-      NODE_OPTIONS: "--experimental-vm-modules --no-warnings"
     steps:
       - uses: actions/checkout@v4
 
@@ -177,10 +337,58 @@ jobs:
           node-version: "22"
           cache: "npm"
 
-      - run: npm ci
+      - run: npm ci && mkdir -p smoke
 
       # Uploads one small blob through Aleph, keyless, then asks every default
       # gateway for it by CID — and fails on an RFC 8594 Sunset header, which
       # a gateway publishes weeks before it goes quiet.
       - name: Every default gateway still serves
-        run: npx jest test/gateway-live.test.js --forceExit
+        run: npx jest test/gateway-live.test.js --forceExit --json --outputFile=smoke/1-gateways.json
+
+      - name: Report
+        if: always()
+        run: node test/helpers/smoke-report.js Gateways smoke
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-gateways
+          path: smoke/report.md
+          if-no-files-found: ignore
+
+  # One issue per provider: opened or commented on each failing day, closed
+  # when it passes again. Only for scheduled runs (or a dispatch that asks),
+  # so a branch run or a labelled pull request never touches the issues.
+  issues:
+    name: Issues per provider
+    needs: [aleph, pinata, lighthouse, storacha, gateways]
+    if: >-
+      always() &&
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_dispatch' && inputs.report_issues))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: smoke-*
+          path: smoke
+
+      - name: Open, comment or close
+        run: |
+          s=.github/scripts/smoke-issues.sh
+          $s Aleph      "${{ needs.aleph.result }}"      smoke/smoke-aleph
+          $s Pinata     "${{ needs.pinata.result }}"     smoke/smoke-pinata
+          $s Lighthouse "${{ needs.lighthouse.result }}" smoke/smoke-lighthouse
+          $s Storacha   "${{ needs.storacha.result }}"   smoke/smoke-storacha
+          $s Gateways   "${{ needs.gateways.result }}"   smoke/smoke-gateways
