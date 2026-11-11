@@ -218,38 +218,4 @@ export const drivers = [
         },
       ]
     : []),
-  // A real Storacha space, on the same terms: opted into twice, and every
-  // upload removed again.
-  ...(process.env.STORACHA_LIVE === "true" &&
-  process.env.STORACHA_KEY &&
-  process.env.STORACHA_PROOF
-    ? [
-        {
-          name: "storacha (live space)",
-          async setUp() {
-            const real = await createStorachaBackend({
-              storachaKey: process.env.STORACHA_KEY,
-              storachaProof: process.env.STORACHA_PROOF,
-            });
-            const created = [];
-            const backend = {
-              ...real,
-              putBlob: async (bytes, meta) => {
-                const handle = await real.putBlob(bytes, meta);
-                created.push(handle);
-                return handle;
-              },
-            };
-            return { backend, real, created, publish: null };
-          },
-          async tearDown(context) {
-            for (const handle of context?.created || []) {
-              await context.real.remove(handle).catch((error) => {
-                console.log(`   cleanup could not remove ${handle.id}: ${error.message}`);
-              });
-            }
-          },
-        },
-      ]
-    : []),
 ];

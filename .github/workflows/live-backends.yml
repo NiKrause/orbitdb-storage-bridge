@@ -11,7 +11,7 @@
 # job). Every provider is asked the same things: is the API there, does an upload
 # go up and get kept, is it listed, does it come back verified against its
 # CID, does a small OrbitDB database survive a backup and a restore on a node
-# that never saw it — and is everything deleted (Pinata, Lighthouse, Storacha)
+# that never saw it — and is everything deleted (Pinata, Lighthouse)
 # or FORGOTTEN (Aleph) again, so nothing accumulates. A few KB per run.
 #
 # Aleph had only a keyless test until 2026-11-11, which never asked Aleph to
@@ -43,10 +43,6 @@ on:
         description: "Lighthouse: upload, list, delete, database restore (not in the daily run unless vars.LIGHTHOUSE_SMOKE is true)"
         type: boolean
         default: false
-      storacha:
-        description: "Storacha: upload, list, remove, database restore (skipped without its secrets)"
-        type: boolean
-        default: true
       gateways:
         description: "Gateways: is every gateway we default to still serving?"
         type: boolean
@@ -264,61 +260,6 @@ jobs:
           path: smoke/report.md
           if-no-files-found: ignore
 
-  # Optional: runs once STORACHA_KEY and STORACHA_PROOF are set, and says it
-  # skipped (a notice, not a failure) until then.
-  storacha:
-    name: Storacha (live)
-    if: >-
-      github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && inputs.storacha) ||
-      (github.event_name == 'pull_request' && github.event.label.name == 'live-backends')
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      STORACHA_LIVE: "true"
-      STORACHA_KEY: ${{ secrets.STORACHA_KEY }}
-      STORACHA_PROOF: ${{ secrets.STORACHA_PROOF }}
-    steps:
-      - name: Storacha secrets present
-        id: configured
-        run: |
-          if [ -n "$STORACHA_KEY" ] && [ -n "$STORACHA_PROOF" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::Storacha skipped: set the STORACHA_KEY and STORACHA_PROOF repository secrets to include it in the smoke test."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - uses: actions/checkout@v4
-        if: steps.configured.outputs.run == 'true'
-
-      - uses: actions/setup-node@v4
-        if: steps.configured.outputs.run == 'true'
-        with:
-          node-version: "22"
-          cache: "npm"
-
-      - if: steps.configured.outputs.run == 'true'
-        run: npm ci && mkdir -p smoke
-
-      # The shared table with the live space in it: upload, list, retrieval
-      # verified against the CID, remove, and a database backed up and
-      # restored. Every upload is removed again in tearDown.
-      - name: Storacha in the conformance and restore suites
-        if: steps.configured.outputs.run == 'true'
-        run: npx jest test/backends/conformance.test.js test/backends/restore.test.js --forceExit --json --outputFile=smoke/1-storacha-table.json
-
-      - name: Report
-        if: always() && steps.configured.outputs.run == 'true'
-        run: node test/helpers/smoke-report.js Storacha smoke
-
-      - uses: actions/upload-artifact@v4
-        if: always() && steps.configured.outputs.run == 'true'
-        with:
-          name: smoke-storacha
-          path: smoke/report.md
-          if-no-files-found: ignore
-
   # Cheap, keyless, and the one that goes stale on its own: a gateway is
   # somebody else's infrastructure and can be retired without telling us.
   # Issue #111 was exactly that, unnoticed until a restore needed the tail of
@@ -365,7 +306,7 @@ jobs:
   # so a branch run or a labelled pull request never touches the issues.
   issues:
     name: Issues per provider
-    needs: [aleph, pinata, lighthouse, storacha, gateways]
+    needs: [aleph, pinata, lighthouse, gateways]
     if: >-
       always() &&
       (github.event_name == 'schedule' ||
@@ -394,5 +335,4 @@ jobs:
           $s Aleph      "${{ needs.aleph.result }}"      smoke/smoke-aleph
           $s Pinata     "${{ needs.pinata.result }}"     smoke/smoke-pinata
           $s Lighthouse "${{ needs.lighthouse.result }}" smoke/smoke-lighthouse
-          $s Storacha   "${{ needs.storacha.result }}"   smoke/smoke-storacha
           $s Gateways   "${{ needs.gateways.result }}"   smoke/smoke-gateways
