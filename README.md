@@ -56,7 +56,7 @@ entry is the Storacha-era class and the helpers it grew.
 | `/restore-cid` | `restoreFromCID`, `restoreFromBlocks`: a database back from a CID, or from blocks verified one by one |
 | `/extract-blocks` | `extractDatabaseBlocks`, `bundleDatabases`: one database's blocks, or several databases' in one bundle |
 | `/app-backup` | one sealed file for an application: `buildAppBackup`, `openAppBackup`, `restoreAppBackup`, `readAppBackupHeader`, `isAppBackup` |
-| `/live-backup` | increments: `createLiveBackup`, `collectIncrement`, `readIncrement`, `mergeIncrements`, `restoreFromIncrements`, `joinIncrements` |
+| `/live-backup` | increments: `createLiveBackup`, `collectIncrement`, `readIncrement`, `mergeIncrements`, `restoreFromIncrements`, `joinIncrements`, and `advanceConfirmation` / `reconcileConfirmation` for a store that refuses later |
 | `/dehydrate` | `dehydrate`, `hydrate`: a database where a second device finds it from a secret alone |
 | `/pointer-ipns` | `publishPointer`, `resolvePointer`: the IPNS pointer `dehydrate` publishes, under a name derived from a seed |
 | `/gateway-fetch` | `fetchFromGateways`: bytes by CID over HTTP, verified against the CID |
@@ -66,7 +66,7 @@ entry is the Storacha-era class and the helpers it grew.
 | `/backends/types` | the contract: `defineBackend`, `BackendError`, the capability flags |
 | `/backends/memory` | the in-process driver |
 | `/backends/aleph` | `createAlephBackend`: ingest to Aleph – its IPFS host, else an API node – with no key, or with `aleph-pin`'s pin to keep in the same call; `onProgress` for the upload |
-| `/backends/aleph-pin` | `createAlephPin`, `createAlephAuthorizer`, `listAlephStores`, `waitForMessage`, `createAlephForget`, `forgetAlephStores`: what makes Aleph keep a file, and lets it go |
+| `/backends/aleph-pin` | `createAlephPin`, `createAlephAuthorizer`, `listAlephStores`, `waitForMessage`, `messageStatus`, `alephCredits`, `createAlephForget`, `forgetAlephStores`: what makes Aleph keep a file, and lets it go |
 | `/backends/aleph-upload` | `unixfsCid`: the CID Aleph gives a file, before the upload; `postFile`, the limits and the upload errors |
 | `/backends/pinata` | Pinata: pin by CID or upload, with a scoped JWT; `remove()` by file id |
 | `/backends/lighthouse` | Lighthouse: upload with an API key; `list()` and `remove()` |

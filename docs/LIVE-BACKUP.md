@@ -162,6 +162,35 @@ that is still pending, so the increment grows rather than anything being lost. `
 many updates are waiting and what the last failure was, so an application can show "last backed up
 …" and mean it.
 
+## When the store says "pending" and refuses later
+
+Aleph takes a STORE with `pending` and may reject it minutes later: a file its nodes could not
+fetch (error code 4), credit that ran out. `confirm` follows the answer for as long as the caller
+waits; an increment still pending then has moved the chain on. So the state also keeps `kept`, the
+last point the store confirmed, and `unconfirmed`, the increments shipped since. `status()` reports
+`unconfirmed` and `keptSequence`.
+
+```js
+import { messageStatus } from "@le-space/orbitdb-storage-bridge/backends/aleph-pin";
+
+// itemHashes: increment id → the STORE's item hash, kept from onShipped's `kept.itemHash`
+const result = await live.reconcile(async (cid) =>
+  (await messageStatus(itemHashes.get(cid))).status,
+);
+// { changed, rewound, gap, sequence }
+```
+
+- An increment the store has confirmed since moves `kept` on.
+- One it refused, or does not know, sends the chain back to `kept`. The next flush ships everything
+  since again, under the next number after the last one kept, so a restore finds no gap.
+- `gap: true` means an increment _after_ a refused one is kept. A restore cannot cross that: make a
+  full backup and `rebase({ base })`.
+
+An application that keeps its own chain state uses the same bookkeeping directly:
+`advanceConfirmation(confirmation, point, cid, status)` after each increment and
+`reconcileConfirmation(confirmation, statusOf)` when it comes back. A point is whatever the
+application needs to go back to (heads, a count of files); only `sequence` and `previous` are read.
+
 ## Several chains on one account
 
 Each watcher numbers its own increments from 1. Two databases on one account, or two devices

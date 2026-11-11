@@ -20,6 +20,8 @@ import {
   createAlephPin,
   createAlephAuthorizer,
   waitForMessage,
+  messageStatus,
+  alephCredits,
   listAlephStores,
   buildForgetMessage,
   createAlephForget,
@@ -357,6 +359,58 @@ function answeringFetch(answers) {
   fetchImpl.urls = urls;
   return fetchImpl;
 }
+
+describe("asking once", () => {
+  const HASH = "b".repeat(64);
+
+  test("a message's status now, with why it was rejected; unknown when Aleph has never seen it", async () => {
+    const details = {
+      errors: [
+        "File not found: QmMadeUp (could not retrieve IPFS content at this time)",
+      ],
+    };
+    await expect(
+      messageStatus(HASH, {
+        fetch: answeringFetch([
+          { status: 200, body: { status: "rejected", error_code: 4, details } },
+        ]),
+      }),
+    ).resolves.toEqual({
+      itemHash: HASH,
+      status: "rejected",
+      errorCode: 4,
+      details,
+    });
+    await expect(
+      messageStatus(HASH, {
+        fetch: answeringFetch([{ status: 404, body: {} }]),
+      }),
+    ).resolves.toEqual({ itemHash: HASH, status: "unknown" });
+    await expect(
+      messageStatus(HASH, {
+        fetch: answeringFetch([{ status: 502, body: {} }]),
+      }),
+    ).rejects.toThrow(/did not answer: 502/);
+  });
+
+  test("an account's credits, or null when Aleph does not say", async () => {
+    const address = `0x${"Ab".repeat(20)}`;
+    const fetchImpl = answeringFetch([
+      { status: 200, body: { credit_balance: 1234 } },
+    ]);
+    await expect(alephCredits(address, { fetch: fetchImpl })).resolves.toBe(
+      1234,
+    );
+    expect(fetchImpl.urls).toEqual([
+      `https://api2.aleph.im/api/v0/addresses/${address}/balance`,
+    ]);
+    await expect(
+      alephCredits(address, {
+        fetch: answeringFetch([{ status: 500, body: {} }]),
+      }),
+    ).resolves.toBeNull();
+  });
+});
 
 describe("following a STORE", () => {
   const HASH = "a".repeat(64);
