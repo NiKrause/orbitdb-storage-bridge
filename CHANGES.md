@@ -1,5 +1,14 @@
 # Changes
 
+## Unreleased
+
+### Changed
+
+- **Storacha is out of the daily live smoke test.** The company behind it has not existed since
+  May 2026, so there is no service left to test against; the Storacha job, its `workflow_dispatch`
+  input and the live Storacha entry in the driver table are gone. The offline suites still run the
+  Storacha driver against the in-memory upload API.
+
 ## 0.28.0 (2026-11-11)
 
 ### Fixed
