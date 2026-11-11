@@ -324,7 +324,10 @@ jobs:
         with:
           sparse-checkout: .github/scripts
 
+      # A run where no job got far enough to write a report still gets its
+      # issues: the script says so when a report is missing.
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           pattern: smoke-*
           path: smoke

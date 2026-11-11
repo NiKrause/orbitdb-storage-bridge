@@ -28,6 +28,7 @@ import {
 import { matchesUnixfsCid, unixfsCid } from "../../lib/backends/aleph-upload.js";
 import { createEthSigner } from "../helpers/eth-signer.js";
 import { SMOKE_CHANNEL } from "./drivers.js";
+import { describeStatus as describeFinal } from "../helpers/aleph-status.js";
 
 jest.setTimeout(240_000);
 
@@ -42,13 +43,6 @@ if (!live) {
 
 const API = DEFAULT_ALEPH_API_HOST;
 const REF = `smoke-${new Date().toISOString().slice(0, 10)}`;
-
-/** Aleph's decision about a message, said so that a log line is enough. */
-const describeFinal = (what, final) =>
-  `${what}: ${final.status}` +
-  (final.errorCode != null ? `, error_code ${final.errorCode}` : "") +
-  (final.timedOut ? " (still pending when the wait ran out)" : "") +
-  (final.details ? ` — ${JSON.stringify(final.details).slice(0, 300)}` : "");
 
 maybe("a real STORE on Aleph, from upload to FORGET", () => {
   const { address, sign } = live

@@ -22,6 +22,7 @@ import {
 } from "../../lib/backends/aleph-pin.js";
 import { createEthSigner } from "../helpers/eth-signer.js";
 import { SMOKE_CHANNEL } from "./drivers.js";
+import { describeStatus } from "../helpers/aleph-status.js";
 
 jest.setTimeout(300_000);
 
@@ -58,15 +59,15 @@ maybe("upload to the IPFS host, then a separate STORE", () => {
       });
       await forget([sent.itemHash], "smoke test").catch(() => {});
     }
+    const what = `STORE ${sent.itemHash} for ${handle.id} (uploaded to ipfs.aleph.cloud/api/v0/add)`;
     expect(
-      `STORE ${sent.itemHash} for ${handle.id} (uploaded to ipfs.aleph.cloud/api/v0/add): ${final.status}` +
-        (final.errorCode != null ? `, error_code ${final.errorCode}` : "") +
-        (final.errorCode === 4
-          ? " — the nodes could not fetch the file from the IPFS host"
-          : "") +
-        (final.timedOut ? " after 240 s" : ""),
-    ).toBe(
-      `STORE ${sent.itemHash} for ${handle.id} (uploaded to ipfs.aleph.cloud/api/v0/add): processed`,
-    );
+      describeStatus(
+        what,
+        final,
+        final.errorCode === 4
+          ? "the nodes could not fetch the file from the IPFS host"
+          : undefined,
+      ),
+    ).toBe(`${what}: processed`);
   });
 });

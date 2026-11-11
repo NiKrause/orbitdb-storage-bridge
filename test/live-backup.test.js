@@ -847,6 +847,52 @@ describe("increments", () => {
     await live.stop();
   });
 
+  test("an upload that carried its own STORE is not pinned again; its pending answer is followed, and 'unknown' right away is not a refusal", async () => {
+    const store = new Map();
+    const inner = createMemoryBackend({ store });
+    const pins = [];
+    const backend = defineBackend({
+      ...inner,
+      capabilities: { ...inner.capabilities, pinByCid: true },
+      // What a signed Aleph upload answers with a 202.
+      putBlob: async (bytes, meta) => ({
+        ...(await inner.putBlob(bytes, meta)),
+        retained: false,
+        status: "pending",
+        itemHash: "f".repeat(64),
+      }),
+      pinCid: async (cid) => {
+        pins.push(cid);
+        return { id: cid, cid, backend: "memory", retained: true };
+      },
+    });
+    const db = await alice.orbitdb.open("live-signed-pending", {
+      type: "events",
+      ...open,
+    });
+    let saved = null;
+    const live = createLiveBackup({
+      databases: [db],
+      backend,
+      state: { load: async () => saved, save: async (s) => (saved = s) },
+    });
+    await live.rebase({ base: "full-backup" });
+    await db.add("one");
+    const shipped = await live.flush();
+    expect(pins).toEqual([]);
+    expect(shipped.kept).toMatchObject({
+      status: "pending",
+      itemHash: "f".repeat(64),
+    });
+    expect(live.status()).toMatchObject({ unconfirmed: 1, keptSequence: 0 });
+
+    // Just shipped, and the node does not know the message yet: wait, not go back.
+    const early = await live.reconcile(() => "unknown");
+    expect(early).toMatchObject({ changed: false, rewound: false });
+    expect(live.status()).toMatchObject({ sequence: 1, unconfirmed: 1 });
+    await live.stop();
+  });
+
   test("the bookkeeping on its own: confirm, go back, and a gap a restore cannot cross", () => {
     const start = {
       kept: { sequence: 0, previous: null, mine: "a" },
