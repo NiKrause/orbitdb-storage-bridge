@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased
+## 0.28.0 (2026-11-11)
 
 ### Fixed
 
@@ -21,13 +21,25 @@
 
 ### Added
 
+- **A live backup goes back when the store refuses later.** Aleph answers a STORE with `pending`
+  and may reject it minutes afterwards; an increment shipped under such an answer used to move
+  the chain on, and nothing shipped its content again. The live backup's state now keeps `kept`
+  (the last point the store confirmed) and `unconfirmed` (the increments shipped since);
+  `createLiveBackup().reconcile(statusOf)` asks about those again – a confirmed one moves `kept`
+  on, a refused or unknown one sends the chain back, so the next flush ships everything since.
+  `gap` says an increment after a refused one is kept, which only a full backup mends. The
+  bookkeeping is exported as `advanceConfirmation` / `reconcileConfirmation` for an application
+  that keeps its own chain state. Beside it, `messageStatus(itemHash)` (`backends/aleph-pin`)
+  asks Aleph once about a message (unknown on 404), and `alephCredits(address)` reads an
+  account's credits (Le-Space/belege#725).
 - **A daily live smoke test.** `.github/workflows/live-backends.yml` runs every day (and still
   by hand or by the `live-backends` label) against Aleph, Pinata, Lighthouse, Storacha (once its
   secrets are set) and the default gateways: reachability, upload, keep, list, retrieval verified
   against the CID, a small database backed up and restored, and cleanup. Aleph now signs real
   STORE messages with a dedicated test account, waits for `processed` and FORGETs them. A
   failing provider gets an issue (label `live-smoke`), commented on each failing day and closed
-  once it passes again.
+  once it passes again. Lighthouse is in the daily run only while the repository variable
+  `LIGHTHOUSE_SMOKE` is `true`.
 
 ## 0.27.2 (2026-10-29)
 
