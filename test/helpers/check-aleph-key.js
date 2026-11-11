@@ -6,6 +6,7 @@
  *     ALEPH_PRIVATE_KEY=0x… node test/helpers/check-aleph-key.js
  */
 import { createEthSigner } from "./eth-signer.js";
+import { alephCredits } from "../../lib/backends/aleph-pin.js";
 
 const raw = process.env.ALEPH_PRIVATE_KEY ?? "";
 if (!raw.trim()) {
@@ -21,19 +22,19 @@ try {
   console.log(`::error::ALEPH_PRIVATE_KEY: ${error.message}`);
   process.exit(1);
 }
-const url = `https://api2.aleph.im/api/v0/addresses/${address}/balance`;
-let body = {};
-let status;
-try {
-  const response = await fetch(url);
-  status = response.status;
-  body = await response.json().catch(() => ({}));
-} catch (error) {
-  status = `no response (${error.message})`;
+// The library's own reading of the balance, so this checks what the library does.
+const credits = await alephCredits(address);
+const endpoint = `https://api2.aleph.im/api/v0/addresses/${address}/balance`;
+if (credits === null) {
+  console.log(
+    `::error::Aleph did not report credits for ${address} (${endpoint}): the API is unreachable, or answers without credit_balance.`,
+  );
+  process.exit(1);
 }
-const credits = body.credit_balance ?? body.credits ?? null;
-console.log(`account ${address}: ${url} → ${status}; balance ${JSON.stringify(body).slice(0, 200)}`);
-if (status === 200 && credits !== null && Number(credits) <= 0) {
-  console.log(`::error::Aleph account ${address} has no credits: STOREs paid in credit will be rejected (402 / error_code 6). Top it up.`);
+console.log(`account ${address}: ${credits} credits`);
+if (credits <= 0) {
+  console.log(
+    `::error::Aleph account ${address} has no credits: STOREs paid in credit will be rejected (402 / error_code 6). Top it up.`,
+  );
   process.exit(1);
 }

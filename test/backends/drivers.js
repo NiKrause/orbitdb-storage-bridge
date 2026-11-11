@@ -24,6 +24,7 @@ import {
   waitForMessage,
 } from "../../lib/backends/aleph-pin.js";
 import { createEthSigner } from "../helpers/eth-signer.js";
+import { describeStatus } from "../helpers/aleph-status.js";
 
 /** The channel every live STORE goes to, so a FORGET of leftovers finds them all. */
 export const SMOKE_CHANNEL = "ORBITDB-STORAGE-BRIDGE-SMOKE";
@@ -185,14 +186,10 @@ export const drivers = [
                   });
                   if (final.status !== "processed") {
                     throw new Error(
-                      `Aleph STORE ${handle.itemHash} for ${handle.id} via /api/v0/ipfs/add_file: ${final.status}` +
-                        (final.errorCode != null
-                          ? `, error_code ${final.errorCode}`
-                          : "") +
-                        (final.timedOut ? " after 180 s" : "") +
-                        (final.details
-                          ? ` — ${JSON.stringify(final.details).slice(0, 300)}`
-                          : ""),
+                      describeStatus(
+                        `Aleph STORE ${handle.itemHash} for ${handle.id} via /api/v0/ipfs/add_file`,
+                        final,
+                      ),
                     );
                   }
                   return { ...handle, retained: true, status: "processed" };

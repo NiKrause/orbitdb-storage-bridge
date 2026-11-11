@@ -13,25 +13,36 @@ const dir = process.argv[3] || "smoke";
 if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
 const lines = [`### ${provider}`, ""];
+const info = [];
 let failed = 0;
 let passed = 0;
 for (const file of readdirSync(dir).filter((f) => f.endsWith(".json")).sort()) {
+  // `info-*`: a step that may fail without failing the job. Reported apart, never counted.
+  const out = file.startsWith("info-") ? info : lines;
+  const count = out === lines;
   let result;
   try {
     result = JSON.parse(readFileSync(join(dir, file), "utf8"));
   } catch {
-    lines.push(`- \`${file}\`: no readable result (the step did not get as far as Jest)`);
+    out.push(`- \`${file}\`: no readable result (the step did not get as far as Jest)`);
     continue;
   }
   for (const suite of result.testResults || []) {
-    if (suite.status === "failed" && !(suite.assertionResults || []).length) {
-      failed++;
-      lines.push(`- ❌ \`${file.replace(/\.json$/, "")}\`: the suite did not run`, "", "```", String(suite.message).slice(0, 1200), "```");
+    const assertions = suite.assertionResults || [];
+    // Failed with no failing test: it did not run, or a hook (beforeAll, afterAll) threw.
+    if (suite.status === "failed" && !assertions.some((a) => a.status === "failed")) {
+      if (count) failed++;
+      out.push(
+        `- ❌ \`${file.replace(/\.json$/, "")}\`: ${assertions.length ? "a hook failed" : "the suite did not run"}`,
+        "", "```",
+        // eslint-disable-next-line no-control-regex
+        String(suite.message).replace(/\u001b\[[0-9;]*m/g, "").slice(0, 1200), "```",
+      );
     }
     for (const a of suite.assertionResults || []) {
-      if (a.status === "passed") passed++;
+      if (a.status === "passed" && count) passed++;
       if (a.status !== "failed") continue;
-      failed++;
+      if (count) failed++;
       const why = (a.failureMessages || []).join("\n")
         // eslint-disable-next-line no-control-regex
         .replace(/\u001b\[[0-9;]*m/g, "")
@@ -39,11 +50,12 @@ for (const file of readdirSync(dir).filter((f) => f.endsWith(".json")).sort()) {
         .filter((l) => !/^\s+at /.test(l))
         .slice(0, 12)
         .join("\n");
-      lines.push(`- ❌ ${a.ancestorTitles.join(" › ")} › **${a.title}**`, "", "```", why.slice(0, 1500), "```");
+      out.push(`- ${count ? "❌" : "⚠️"} ${a.ancestorTitles.join(" › ")} › **${a.title}**`, "", "```", why.slice(0, 1500), "```");
     }
   }
 }
 lines.splice(2, 0, `${passed} passed, ${failed} failed`, "");
+if (info.length) lines.push("", "Informational (does not fail the job):", "", ...info);
 const text = `${lines.join("\n")}\n`;
 writeFileSync(join(dir, "report.md"), text);
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, text);

@@ -391,6 +391,12 @@ describe("asking once", () => {
         fetch: answeringFetch([{ status: 502, body: {} }]),
       }),
     ).rejects.toThrow(/did not answer: 502/);
+    // A 200 that names no status is no answer, not "unknown" (which reads as refused).
+    await expect(
+      messageStatus(HASH, {
+        fetch: answeringFetch([{ status: 200, body: { nothing: true } }]),
+      }),
+    ).rejects.toThrow(/without a message status/);
   });
 
   test("an account's credits, or null when Aleph does not say", async () => {

@@ -1,5 +1,26 @@
 # Changes
 
+## Unreleased
+
+### Fixed
+
+- **A live backup no longer sends a second STORE for a signed Aleph upload.** Since 0.28.0 an
+  upload with a signing pin carries its STORE and answers `status` (`pending` on a 202). The live
+  backup took `retained: false` as "not kept" and asked `pinCid` again – a second STORE, paid twice,
+  by the path whose STOREs Aleph's nodes could not fetch – and, without `keep`, recorded a pending
+  upload as confirmed. A handle that carries a `status` is now followed (`confirm`) and recorded as
+  it is.
+- **`reconcile()` and a flush no longer overwrite each other.** A flush that ran while
+  `reconcile()` was asking the store lost its increment from `unconfirmed`, or was rewound under;
+  the answers are now applied with no flush running, and a flush waits for that.
+- **"Unknown" right after shipping is not a refusal.** Aleph answers 404 until a message has
+  reached the node; `reconcile()` takes `unknown` as refused only for an increment shipped more
+  than `UNKNOWN_GRACE_MS` (10 minutes) ago. `messageStatus` throws on a 200 that names no status
+  instead of answering `unknown`.
+- **The smoke test says what failed.** The Aleph key check fails when the API does not report
+  credits (it uses `alephCredits`); the report names a failing hook and lists informational steps
+  apart; the issue step runs even when no job wrote a report.
+
 ## 0.28.0 (2026-11-11)
 
 ### Fixed
