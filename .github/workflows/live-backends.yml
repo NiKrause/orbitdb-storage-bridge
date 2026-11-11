@@ -7,7 +7,8 @@
 #   - label a pull request `live-backends`, which runs it against that pull
 #     request's code before it is merged.
 #
-# Every provider is asked the same things: is the API there, does an upload
+# Lighthouse is left out of the daily run while its plan has lapsed (see its
+# job). Every provider is asked the same things: is the API there, does an upload
 # go up and get kept, is it listed, does it come back verified against its
 # CID, does a small OrbitDB database survive a backup and a restore on a node
 # that never saw it — and is everything deleted (Pinata, Lighthouse, Storacha)
@@ -39,9 +40,9 @@ on:
         type: boolean
         default: true
       lighthouse:
-        description: "Lighthouse: upload, list, delete, database restore"
+        description: "Lighthouse: upload, list, delete, database restore (not in the daily run unless vars.LIGHTHOUSE_SMOKE is true)"
         type: boolean
-        default: true
+        default: false
       storacha:
         description: "Storacha: upload, list, remove, database restore (skipped without its secrets)"
         type: boolean
@@ -215,10 +216,13 @@ jobs:
           path: smoke/report.md
           if-no-files-found: ignore
 
+  # Not in the daily run while the account's plan has lapsed (2026-11-11:
+  # every upload 403 "Trial expired"). Set the repository variable
+  # LIGHTHOUSE_SMOKE to "true" to put it back; by hand and by label it runs.
   lighthouse:
     name: Lighthouse (live)
     if: >-
-      github.event_name == 'schedule' ||
+      (github.event_name == 'schedule' && vars.LIGHTHOUSE_SMOKE == 'true') ||
       (github.event_name == 'workflow_dispatch' && inputs.lighthouse) ||
       (github.event_name == 'pull_request' && github.event.label.name == 'live-backends')
     runs-on: ubuntu-latest
