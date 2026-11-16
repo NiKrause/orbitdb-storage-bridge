@@ -1,5 +1,22 @@
 # Changes
 
+## Unreleased
+
+### Added
+
+- **A check that every suite runs in some workflow.** 13 of the 35 files under `test/` ran in no job
+  at all until #169, `backup-bundle.test.js` among them — which had been failing on `main` since
+  #162 while the pipeline stayed green, because nothing ran it. #169 removed the cause by naming the
+  no-secrets set by exclusion, and left the assumption that the five suites it excludes still have
+  jobs of their own: delete one of those jobs and that suite goes quiet again, with nothing to say
+  so. `test/workflow-coverage.test.js` reads the workflows for every `run:` that ends in jest,
+  resolves `npm run …` through package.json, honours `--testPathIgnorePatterns` (which replaces the
+  jest config's list rather than extending it), and asserts that the suites nothing runs are exactly
+  the ones recorded as deliberate — today one, `access-control-integration.test.js`, which needs
+  credentials for a service that shut down on 2026-05-15. A step with `working-directory` covers
+  nothing here: counting the recovery example's own `npm test` would make the check vacuous, so that
+  is asserted too.
+
 ## 0.28.1 (2026-11-11)
 
 ### Fixed
