@@ -26,6 +26,7 @@
     "./backends/lighthouse": "./lib/backends/lighthouse.js",
     "./backends/mirror": "./lib/backends/mirror.js",
     "./backends/encryption": "./lib/backends/encryption.js",
+    "./backends/frames": "./lib/backends/frames.js",
     "./backends/choose": "./lib/backends/choose.js",
     "./backends/resolve": "./lib/backends/resolve.js",
     "./memory-courier": "./lib/memory-courier.js",

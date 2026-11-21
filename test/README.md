@@ -20,7 +20,10 @@ credential or the network unless its row says so; the live ones skip themselves 
 | `courier-sync.test.js` | replication over a byte courier | |
 | `live-backup.test.js` | increments: what was written since the last one, and the restore from a chain | |
 | `app-backup.test.js` | an application's backup in one sealed file, and back | |
+| `app-backup-stream.test.js` | the same sealed in frames and restored as it arrives: a wrong key or other books before a block is stored, a damaged file before a database is opened; the backup in one piece still restores | |
+| `streamed-restore-memory.test.js` | 100 MiB restored under 32 MiB of buffers, where the restore in one piece holds over 200; each in a process of its own (`helpers/restore-memory.js`) | |
 | `gateway-fetch.test.js`, `peer-fetch.test.js` | fetching by CID: a gateway that is wrong rather than down; peers instead of a gateway | |
+| `gateway-stream.test.js` | a file as it arrives: picked up where a connection dropped, refused at the end when it is not the file; the peers going on at the byte the gateway stopped at | |
 | `access-control-integration.test.js`, `p256-ucan-security.test.js` | UCAN access control and P-256 UCANs, Storacha-era | `npm run test:p256-ucan` |
 | `ipns-restore.test.js` | restore by IPNS, Storacha-era | |
 | `storage-probe.test.js` | the probe page names the endpoints it talks to, and so does its code | |
@@ -36,6 +39,7 @@ credential or the network unless its row says so; the live ones skip themselves 
 | `car-first.test.js` | a CAR by default, and the refusals that make it worth it |
 | `choose.test.js` | a backend from a name and a key — what a page has |
 | `encryption.test.js` | a backup the service holding it cannot read |
+| `frames.test.js` | the envelope in frames: the format byte for byte, and a frame left out, moved, altered, cut off or appended refused at its index |
 | `mirror.test.js` | what a mirror promises across several services, and what it does not |
 | `aleph-pin.test.js` | the STORE: what gets signed and what is never seen; the owner's authorizations; listing by owner and `ref`; waiting for a decision; FORGET |
 | `pinata.test.js`, `lighthouse.test.js` | what each driver refuses to be, what it sends, how it reads |

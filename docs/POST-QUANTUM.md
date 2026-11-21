@@ -12,7 +12,7 @@ of this repository, not a cryptographic review.
 
 | | | |
 | --- | --- | --- |
-| the data | **AES-256-GCM**, 12-byte IV | [`lib/backends/encryption.js`](../lib/backends/encryption.js) |
+| the data | **AES-256-GCM**, 12-byte IV | [`lib/backends/encryption.js`](../lib/backends/encryption.js); in frames, under a key per file from **HKDF-SHA-256**, [`lib/backends/frames.js`](../lib/backends/frames.js) |
 | its key | **HKDF-SHA-256** over the PRF output | the consumer's, e.g. `examples/svelte/recovery/src/stack.js` |
 | the PRF | **HMAC-SHA-256** inside the authenticator (CTAP2 `hmac-secret`) | the security key itself |
 | log entries | **secp256k1** | the OrbitDB identity |
