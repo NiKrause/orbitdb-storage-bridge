@@ -660,6 +660,40 @@ describe("increments", () => {
     await live.stop();
   });
 
+  test("the metadata merges without the blocks, and an empty database keeps its stated heads", () => {
+    // What a streamed restore has: the manifests, the blocks already stored.
+    const base = {
+      metadata: {
+        timestamp: 1,
+        databases: [
+          { address: "/orbitdb/a", type: "events", heads: ["h1"] },
+          { address: "/orbitdb/empty", type: "events", heads: [] },
+          { address: "/orbitdb/unstated", type: "events" },
+        ],
+      },
+    };
+    const increment = {
+      manifest: {
+        sequence: 1,
+        metadata: {
+          timestamp: 2,
+          databases: [{ address: "/orbitdb/a", heads: ["h2"] }],
+        },
+      },
+    };
+    const merged = mergeIncrements({ base, increments: [increment] });
+    expect(merged.blocks.size).toBe(0);
+    expect(merged.sequences).toEqual([1]);
+    const byAddress = Object.fromEntries(
+      merged.metadata.databases.map((d) => [d.address, d]),
+    );
+    expect(byAddress["/orbitdb/a"].heads).toEqual(["h1", "h2"]);
+    // Stated and empty stays stated: nobody has to look for heads among blocks.
+    expect(byAddress["/orbitdb/empty"].heads).toEqual([]);
+    // Never stated stays unstated.
+    expect(byAddress["/orbitdb/unstated"]).not.toHaveProperty("heads");
+  });
+
   test("a chain with a hole is refused up front, and joined when the caller says so", async () => {
     const store = new Map();
     const backend = createMemoryBackend({ store });

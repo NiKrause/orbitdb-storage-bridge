@@ -32,7 +32,9 @@
     come and keeps their names (`storeBlocks` does the same for blocks already out of their CAR);
     `restoreFromStoredBlocks` is `restoreFromBlocks` for blocks that
     are in the blockstore already. Several CARs go into one result, as a base and its increments
-    are several files.
+    are several files. `mergeIncrements` merges their metadata without their blocks, and keeps
+    `heads: []` for a database a source states as empty (it dropped the key, which read as
+    "not stated").
   - **The application backup.** `buildAppBackup({ key })` seals in frames, with the header bound
     into the frames' key and the manifest as the CAR's first block. `restoreAppBackupStream`
     restores from a stream: a wrong key before the first frame, another application's backup or
