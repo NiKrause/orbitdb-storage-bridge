@@ -4,6 +4,52 @@
 
 ### Added
 
+- **A sealed backup restored as it arrives, in the memory of a frame and a block (#187).**
+  Restoring held the backup three times: the fetched file, its plaintext, and the blocks on
+  their way into the blockstore. For Le-Space/belege's 720 MB that is over 2 GB, and a phone's
+  browser ends such a tab without a word. Measured here (`test/streamed-restore-memory.test.js`): a
+  backup of 100 MiB takes about 300 MiB of buffers restored in one piece and about 11 MiB
+  streamed, and the 11 do not grow with the backup.
+  - **The envelope in frames**, `OSBE` version 2 (`/backends/frames`: `sealFrames`, `openFrames`,
+    `sealFramed`, `openFramed`, `FrameError`). The file is sealed in frames of 1 MiB under a key
+    of its own (HKDF-SHA-256 from the caller's key, a salt, the frame size and a context), each
+    frame AES-256-GCM with its index and a last-frame mark in the nonce and, with the header, in
+    the additional data. A key check in front says "wrong key" before a frame is opened. A frame
+    left out, moved, repeated, altered or from another file is refused with its index, and so is
+    a file cut short or with anything appended. The layout is in
+    [docs/APP-BACKUP.md](docs/APP-BACKUP.md#the-envelope-in-frames). It takes the key itself
+    (32 bytes, or a `CryptoKey` for HKDF), not the caller's `encrypt`: nonce and additional data
+    are the format's to choose.
+  - **Fetch as a stream.** `streamFromGateways(cid)` yields the gateway's chunks and picks a
+    dropped connection up at the byte it stopped at (`Range`); the idle clock stands still while
+    the caller is busy with a chunk. The Aleph driver has `getBlobStream(handle, { size })`,
+    which checks the size and the UnixFS CID at the end (`unixfsCidVerifier`, the DAG built again
+    as the chunks come). `createPeerFetch(…).stream` is the same over libp2p, from an `offset`
+    when given, and `createGatewayFirstStream` hands over to the peers at the byte the gateway
+    stopped at.
+  - **The CAR as a stream.** `openCARStream` gives a CAR's roots and then its blocks one at a
+    time, each checked against its CID. `storeBlocksFromCAR` puts them into a blockstore as they
+    come and keeps their names (`storeBlocks` does the same for blocks already out of their CAR);
+    `restoreFromStoredBlocks` is `restoreFromBlocks` for blocks that
+    are in the blockstore already. Several CARs go into one result, as a base and its increments
+    are several files. `mergeIncrements` merges their metadata without their blocks, and keeps
+    `heads: []` for a database a source states as empty (it dropped the key, which read as
+    "not stated").
+  - **The application backup.** `buildAppBackup({ key })` seals in frames, with the header bound
+    into the frames' key and the manifest as the CAR's first block. `restoreAppBackupStream`
+    restores from a stream: a wrong key before the first frame, another application's backup or
+    one of other books at the manifest and so before a block is stored, the databases joined only
+    after the last frame opened. `readAppBackupHeaderStream` reads the header from the first
+    bytes; `onHeader` hands it over for a keyring. One `onProgress` for the stages `opened`
+    (frames), `stored` (blocks) and `database`; bytes fetched are `getBlobStream`'s to report.
+  - **What does not change.** The envelope in one piece (version 1, `encrypt`/`decrypt`) is
+    written and read as before, by `withEncryption`, `openAppBackup` and, held whole,
+    `restoreAppBackupStream`. A backup already made in one piece cannot be opened as it arrives:
+    AES-GCM over the whole file has one tag at its end. Building a backup stays in memory, and an
+    upload wants its whole body.
+  - A build from before reads `OSBE` version 2 as "written with envelope version 2 … Upgrade",
+    not as noise; `readEnvelope` here names the frames.
+
 - **A check that every suite runs in some workflow.** 13 of the 35 files under `test/` ran in no job
   at all until #169, `backup-bundle.test.js` among them — which had been failing on `main` since
   #162 while the pipeline stayed green, because nothing ran it. #169 removed the cause by naming the

@@ -59,8 +59,8 @@ entry is the Storacha-era class and the helpers it grew.
 | `/live-backup` | increments: `createLiveBackup`, `collectIncrement`, `readIncrement`, `mergeIncrements`, `restoreFromIncrements`, `joinIncrements`, and `advanceConfirmation` / `reconcileConfirmation` for a store that refuses later |
 | `/dehydrate` | `dehydrate`, `hydrate`: a database where a second device finds it from a secret alone |
 | `/pointer-ipns` | `publishPointer`, `resolvePointer`: the IPNS pointer `dehydrate` publishes, under a name derived from a seed |
-| `/gateway-fetch` | `fetchFromGateways`: bytes by CID over HTTP, verified against the CID |
-| `/peer-fetch` | `createPeerFetch`, `createGatewayFirstFetch`: bytes by CID from the peers that hold them, over libp2p |
+| `/gateway-fetch` | `fetchFromGateways`: bytes by CID over HTTP, verified against the CID; `streamFromGateways`: the same as they arrive, picked up where a connection dropped |
+| `/peer-fetch` | `createPeerFetch`, `createGatewayFirstFetch`: bytes by CID from the peers that hold them, over libp2p; `.stream` and `createGatewayFirstStream` for a file too large to hold |
 | `/courier-sync` | `createCourierSync`: replication over any byte courier — a LoRa mesh, a QR relay, a file |
 | `/memory-courier` | `createMemoryCourierPair`: the in-process courier for tests and demos |
 | `/backends/types` | the contract: `defineBackend`, `BackendError`, the capability flags |
@@ -73,6 +73,7 @@ entry is the Storacha-era class and the helpers it grew.
 | `/backends/storacha` | the Storacha driver; needs the optional peer `@storacha/client`, and a service that no longer answers |
 | `/backends/mirror` | one backup to several backends |
 | `/backends/encryption` | `withEncryption`: the service holds ciphertext |
+| `/backends/frames` | `sealFrames`, `openFrames`: the envelope in frames, opened as it arrives, for a backup a phone restores |
 | `/backends/choose` | `createBackendFromChoice`: a backend from a name and a key, for a page's form |
 | `/backends/resolve` | `resolveBackend`: the options-to-backend step the older functions share |
 | `/storacha-backup`, `/components/*` | the JavaScript of the old browser widget: `storacha-backup.js`, `WebAuthnDIDProvider.js`, `theme.js`. The two `.svelte` components were dropped — they imported four files no release ever contained ([docs/STORACHA-UI-HISTORY.md](docs/STORACHA-UI-HISTORY.md)) |

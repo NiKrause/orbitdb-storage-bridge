@@ -19,8 +19,8 @@ Verified on 2026-09-05:
 
 The gateway those redirects pointed at is gone too. On **2026-09-21** Protocol Labs retired
 `ipfs.io` and `dweb.link`: both answer `429` with an RFC 8594 `Sunset` header and a link to
-[gatewaychanges.ipfs.io](https://gatewaychanges.ipfs.io/), so `storacha.link` and `w3s.link`
-now redirect to a closed door. Retrieval defaults here are `ipfs.aleph.cloud` — the one free
+`gatewaychanges.ipfs.io` (a page that itself answers `404` since 2026-11-21, so it is named
+here and no longer linked), so `storacha.link` and `w3s.link` now redirect to a closed door. Retrieval defaults here are `ipfs.aleph.cloud` — the one free
 path gateway measured still serving arbitrary CIDs on 2026-09-23 — with
 `trustless-gateway.link` available for verifiable single-block requests
 (`Accept: application/vnd.ipld.raw`). One host is not a fallback chain, which is why `peer-fetch.js` fetches from the providers that

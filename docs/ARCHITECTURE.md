@@ -44,7 +44,7 @@ and the reason two of them may point backwards.
 | --- | --- | --- |
 | the contract | `backends/types.js` (193 lines) | nothing |
 | providers | `aleph` 322, `pinata` 330, `lighthouse` 325, `storacha` 181, `memory` 140, plus the Aleph helpers `aleph-pin` 887 and `aleph-upload` 243, and the Storacha loader `storacha-client` 36 | the contract, and for `aleph` the gateway reader |
-| wrappers | `mirror` 234 (write to several), `encryption` 284 (the service holds ciphertext) | the contract |
+| wrappers | `mirror` 234 (write to several), `encryption` 297 (the service holds ciphertext), `frames` 495 (the same in frames, opened as it arrives) | the contract |
 | choosing one | `choose` 186, `resolve` 82 | the contract, and every driver — late |
 | moving bytes | `gateway-fetch` 243, `peer-fetch` 391, `courier-sync` 1312, `memory-courier` 105, `pointer-ipns` 234 | nothing of ours, bar the logger |
 | operations | `backup-car` 1291, `restore-cid` 578, `extract-blocks` 331, `app-backup` 300, `live-backup` 865, `dehydrate` 188 | everything below |
@@ -68,7 +68,8 @@ grep -rnE 'from "\./backends/(aleph|pinata|lighthouse|storacha|memory|mirror)' l
 
 The deliberate exception is `backends/encryption`, which `app-backup` and `dehydrate` import
 directly — it is not a provider but a decorator over whichever one it is handed, so naming it
-commits to nothing.
+commits to nothing. `backends/frames`, which `app-backup` imports, is the same kind: a format, not
+a provider.
 
 ## Rule 2: `@storacha/client` is never imported statically
 
